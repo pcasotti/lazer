@@ -2,8 +2,8 @@
 
 LAZER_DIR = ../..
 
-LIBS = $(LAZER_DIR)/liblazer.a -lmpfr -lgmp -lm ../../third_party/hexl-development/build/hexl/lib64/libhexl.a -lstdc++ #XXX
-CFLAGS = -Wall -Wextra -Wshadow -Wundef -O3 -g
+LIBS = $(LAZER_DIR)/liblazer.a -lflint -lmpfr -lgmp -lm ../../third_party/hexl-development/build/hexl/lib64/libhexl.a -lstdc++ #XXX
+CFLAGS = -Wall -Wextra -Wshadow -Wundef -Og -ggdb3
 
 all: kyber1024-demo
 

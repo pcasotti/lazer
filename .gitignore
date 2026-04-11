@@ -59,3 +59,9 @@ third_party/hexl-development/
 docs/build/*
 
 python/_cstruc_ffi.c
+.cache/*
+.direnv/*
+.envrc
+demos/*/.cache
+compile_commands.json
+demos/*/compile_commands.json

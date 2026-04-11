@@ -6,7 +6,7 @@ CFLAGS_DEBUG = $(CFLAGS_WARN) -Og -ggdb3
 ADD_CPPFLAGS = -DNDEBUG
 
 CPPFLAGS += $(ADD_CPPFLAGS)
-LIBS = -lm $(HEXL_DIR)/build/hexl/lib64/libhexl.a -lstdc++
+LIBS = -lm $(HEXL_DIR)/build/hexl/lib64/libhexl.a -lstdc++ -lflint
 
 # honor user CFLAGS
 ifdef CFLAGS
@@ -176,7 +176,7 @@ HEXL_ZIP = $(HEXL_DIR).zip
 
 $(HEXL_DIR): $(HEXL_ZIP)
 	cd $(THIRD_PARTY_DIR) && unzip $(HEXL_SUBDIR).zip
-	cd $(HEXL_DIR) && cmake -S . -B build -DHEXL_BENCHMARK=OFF -DHEXL_TESTING=OFF
+	cd $(HEXL_DIR) && cmake -S . -B build -DHEXL_BENCHMARK=OFF -DHEXL_TESTING=OFF -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 	cd $(HEXL_DIR) && cmake --build build
 #	cd $(HEXL_DIR) && cmake -S . -B build -DHEXL_SHARED_LIB=ON
 #	cd $(HEXL_DIR) && cmake --build build
