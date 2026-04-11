@@ -1,3 +1,4 @@
+#include "flint/abdlop.h"
 #include "lazer.h"
 
 /*
@@ -60,6 +61,34 @@ abdlop_keygen (polymat_t A1, polymat_t A2prime, polymat_t Bprime,
     polymat_urandom (Bprime, q, log2q, seed, 2);
 }
 
+void polyvec_pretty_print(polyvec_t s2) {
+    polyvec_fromcrt(s2);
+    unsigned int i, j;
+    _VEC_FOREACH_ELEM(s2, i) {
+        poly_ptr poly = polyvec_get_elem(s2, i);
+        intvec_ptr coeffs = _get_coeffvec(poly);
+        _VEC_FOREACH_ELEM(coeffs, j) {
+            int_ptr coeff = intvec_get_elem(coeffs, j);
+            int_redp(coeff, coeff, s2->ring->q);
+        }
+    }
+    polyvec_dump(s2);
+}
+
+void polymat_pretty_print(polymat_t s2) {
+    polymat_fromcrt(s2);
+    unsigned int i, j;
+    _MAT_FOREACH_ELEM(s2, i, j) {
+        poly_ptr poly = polymat_get_elem(s2, i, j);
+        intvec_ptr coeffs = _get_coeffvec(poly);
+        _VEC_FOREACH_ELEM(coeffs, j) {
+            int_ptr coeff = intvec_get_elem(coeffs, j);
+            int_redp(coeff, coeff, s2->ring->q);
+        }
+    }
+    polymat_dump(s2);
+}
+
 /*
  * Compute commitment (tA1,tB) to "small" message s1 and message m_
  * from randomness s2 and public key (A1,A2prime,Bprime).
@@ -88,6 +117,8 @@ abdlop_commit (polyvec_t tA1, polyvec_t tA2, polyvec_t tB, polyvec_t s1,
                polyvec_t m, polyvec_t s2, polymat_t A1, polymat_t A2prime,
                polymat_t Bprime, const abdlop_params_t params)
 {
+  abdlop_commit_flint2(tA1, tA2, tB, s1, m, s2, A1, A2prime, Bprime, params);
+
 #if ASSERT == ASSERT_ENABLED
   polyring_srcptr Rq = params->ring;
   const unsigned int lext = params->lext;
