@@ -936,7 +936,7 @@ polyvec_out_str (FILE *stream, int base, polyvec_t a)
 
     if (i + 1 < a->nelems)
       {
-        fprintf (stream, ",");
+        fprintf (stream, "\n");
         nbytes += 1;
       }
   }

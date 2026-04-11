@@ -580,7 +580,7 @@ polymat_out_str (FILE *stream, int base, const polymat_t a)
 
     if (i + 1 < a->nrows)
       {
-        fprintf (stream, ",");
+        fprintf (stream, "\n");
         nbytes += 1;
       }
   }
