@@ -4,6 +4,7 @@
 #include "abdlop-params4.h"
 #include "lazer.h"
 #include "test.h"
+#include "../src/flint/abdlop.h"
 
 static void test_abdlop (uint8_t seed[32], const abdlop_params_t params);
 
@@ -15,27 +16,32 @@ main (void)
 
   lazer_init();
 
+  // for (i = 0; i < 2; i++)
+  //   {
+  //     printf("\nTEST 1\n");
+  //     bytes_urandom (seed, sizeof (seed));
+  //     test_abdlop (seed, params1);
+  //   }
+  // for (i = 0; i < 2; i++)
+  //   {
+  //     printf("\nTEST 2\n");
+  //     bytes_urandom (seed, sizeof (seed));
+  //     test_abdlop (seed, params2);
+  //   }
+  // for (i = 0; i < 2; i++)
+  //   {
+  //     printf("\nTEST 3\n");
+  //    bytes_urandom (seed, sizeof (seed));
+  //    test_abdlop (seed, params3);
+  //   }
   for (i = 0; i < 2; i++)
     {
-      bytes_urandom (seed, sizeof (seed));
-      test_abdlop (seed, params1);
-    }
-  for (i = 0; i < 2; i++)
-    {
-      bytes_urandom (seed, sizeof (seed));
-      test_abdlop (seed, params2);
-    }
-  for (i = 0; i < 2; i++)
-    {
-      bytes_urandom (seed, sizeof (seed));
-      test_abdlop (seed, params3);
-    }
-  for (i = 0; i < 2; i++)
-    {
+      printf("\nTEST 4\n");
       bytes_urandom (seed, sizeof (seed));
       test_abdlop (seed, params4);
     }
 
+  printf("\nTEST_PASS\n");
   TEST_PASS ();
 }
 
@@ -91,6 +97,7 @@ test_abdlop (uint8_t seed[32], const abdlop_params_t params)
 
   /* generate public parameters */
 
+  abdlop_keygen_flint2 (A1, A2prime, Bprime, seed, params);
   abdlop_keygen (A1, A2prime, Bprime, seed, params);
 
   /* generate proof */

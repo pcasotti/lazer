@@ -1,7 +1,6 @@
 CFLAGS_FALCON_AMD64 = -DFALCON_FPNATIVE -DFALCON_AVX2 -DFALCON_FMA
 CFLAGS_WARN = -Wall -Wextra
-CFLAGS_DEFAULT = $(CFLAGS_WARN) -O3 -g -march=native -mtune=native\
- -fomit-frame-pointer
+CFLAGS_DEFAULT = $(CFLAGS_WARN) -Og -ggdb3
 CFLAGS_DEBUG = $(CFLAGS_WARN) -Og -ggdb3
 ADD_CPPFLAGS = -DNDEBUG
 
@@ -426,7 +425,8 @@ LIBSOURCES = \
  src/stopwatch.c \
  src/urandom.h \
  src/urandom.c \
- src/version.c
+ src/version.c \
+ src/flint/abdlop.c
 
 #src/ntt.c \
 #src/ntt.h \

@@ -551,6 +551,13 @@ intvec_urandom_bnd (intvec_t r, const int_t lo, const int_t hi,
 size_t
 intvec_out_str (FILE *stream, int base, const intvec_t a)
 {
+  INTVEC_T (r0, a->nelems, a->nlimbs);
+  // static const limb_t params1_q_limbs[] = {1099511628221UL};
+  // static const int_t q = {{(limb_t *)params1_q_limbs, 1, 0}};
+  INT_T(q, 1);
+  int_set_i64(q, 1099511628221);
+  intvec_redp (r0, a, q);
+
   int_srcptr ptr;
   unsigned int i;
   size_t nbytes = 0;
@@ -558,12 +565,12 @@ intvec_out_str (FILE *stream, int base, const intvec_t a)
   fprintf (stream, "(");
   nbytes += 1;
 
-  _VEC_FOREACH_ELEM (a, i)
+  _VEC_FOREACH_ELEM (r0, i)
   {
-    ptr = intvec_get_elem_src (a, i);
+    ptr = intvec_get_elem_src (r0, i);
     nbytes += int_out_str (stream, base, ptr);
 
-    if (i + 1 < a->nelems)
+    if (i + 1 < r0->nelems)
       {
         fprintf (stream, ",");
         nbytes += 1;

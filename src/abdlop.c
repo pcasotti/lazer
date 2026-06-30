@@ -1,5 +1,6 @@
 #include "flint/abdlop.h"
 #include "lazer.h"
+#include <time.h>
 
 /*
  * A1 uniform in Rq^(kmsis x m1)
@@ -55,38 +56,14 @@ abdlop_keygen (polymat_t A1, polymat_t A2prime, polymat_t Bprime,
     {
       polymat_urandom (A1, q, log2q, seed, 0);
       polymat_urandom (A2prime, q, log2q, seed, 1);
+      polymat_redp(A1, A1); printf("\n"); polymat_dump(A1); printf("\n");
+      polymat_redp(A2prime, A2prime); printf("\n"); polymat_dump(A2prime); printf("\n");
     }
 
-  if (l_ > 0)
+  if (l_ > 0) {
     polymat_urandom (Bprime, q, log2q, seed, 2);
-}
-
-void polyvec_pretty_print(polyvec_t s2) {
-    polyvec_fromcrt(s2);
-    unsigned int i, j;
-    _VEC_FOREACH_ELEM(s2, i) {
-        poly_ptr poly = polyvec_get_elem(s2, i);
-        intvec_ptr coeffs = _get_coeffvec(poly);
-        _VEC_FOREACH_ELEM(coeffs, j) {
-            int_ptr coeff = intvec_get_elem(coeffs, j);
-            int_redp(coeff, coeff, s2->ring->q);
-        }
-    }
-    polyvec_dump(s2);
-}
-
-void polymat_pretty_print(polymat_t s2) {
-    polymat_fromcrt(s2);
-    unsigned int i, j;
-    _MAT_FOREACH_ELEM(s2, i, j) {
-        poly_ptr poly = polymat_get_elem(s2, i, j);
-        intvec_ptr coeffs = _get_coeffvec(poly);
-        _VEC_FOREACH_ELEM(coeffs, j) {
-            int_ptr coeff = intvec_get_elem(coeffs, j);
-            int_redp(coeff, coeff, s2->ring->q);
-        }
-    }
-    polymat_dump(s2);
+    polymat_redp(Bprime, Bprime); printf("\n"); polymat_dump(Bprime); printf("\n");
+  }
 }
 
 /*
@@ -118,6 +95,7 @@ abdlop_commit (polyvec_t tA1, polyvec_t tA2, polyvec_t tB, polyvec_t s1,
                polymat_t Bprime, const abdlop_params_t params)
 {
   abdlop_commit_flint2(tA1, tA2, tB, s1, m, s2, A1, A2prime, Bprime, params);
+  clock_t start = clock();
 
 #if ASSERT == ASSERT_ENABLED
   polyring_srcptr Rq = params->ring;
@@ -163,11 +141,14 @@ abdlop_commit (polyvec_t tA1, polyvec_t tA2, polyvec_t tB, polyvec_t s1,
       polyvec_addmul (tA2, A1, s1, 0);
       polyvec_addmul (tA2, A2prime, s21, 0);
 
+      // polyvec_redp(tA2, tA2); printf("\n"); polyvec_dump(tA2); printf("\n");
       polyvec_dcompress_power2round (tA1, tA2, dcomp_param);
       polyvec_sublshift (tA2, tA1, D);
 
       polyvec_mod (tA1, tA1);
       polyvec_mod (tA2, tA2);
+      // polyvec_redp(tA2, tA2); printf("\n"); polyvec_dump(tA2); printf("\n");
+      // polyvec_redp(tA1, tA1); printf("\n"); polyvec_dump(tA1); printf("\n");
     }
 
   if (l > 0)
@@ -180,6 +161,9 @@ abdlop_commit (polyvec_t tA1, polyvec_t tA2, polyvec_t tB, polyvec_t s1,
       polyvec_addmul (tB_, Bprime_, s21, 0);
       polyvec_mod (tB_, tB_);
     }
+
+  clock_t end = clock();
+  printf("Lazer: %f\n", (double)(end-start));
 }
 
 void

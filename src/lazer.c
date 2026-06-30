@@ -1,3 +1,4 @@
+#include "flint/abdlop.c"
 #include "abdlop.c"
 #include "aes256ctr-amd64.c"
 #include "aes256ctr.c"

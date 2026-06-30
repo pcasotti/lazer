@@ -2,6 +2,8 @@
 
 #include "../../lazer.h"
 #include <flint/fq_nmod_types.h>
+#include <flint/fq_default.h>
+#include <flint/fq_default_mat.h>
 
 typedef struct {
   fmpz_t q;
@@ -19,7 +21,8 @@ typedef struct {
 typedef dcompress_params_flint_struct dcompress_params_flint_t[1];
 
 typedef struct {
-  fq_nmod_ctx_struct *ring;
+  fq_default_ctx_struct *ring;
+  fmpz_mod_ctx_struct *mod_ctx;
   dcompress_params_flint_t dcompress;
   /* dimensions  */
   unsigned int m1;   /* length of "short" message s1 */
@@ -46,27 +49,27 @@ typedef struct {
 typedef abdlop_params_flint_struct abdlop_params_flint_t[1];
 
 void polymat_to_fq_mat(polymat_t src, fq_nmod_mat_t dst, fq_nmod_ctx_t ctx);
-void polyvec_to_fq_mat(polyvec_t src, fq_nmod_mat_t dst, fq_nmod_ctx_t ctx);
+void polyvec_to_fq_mat(polyvec_t src, fq_default_mat_t dst, fq_default_ctx_t ctx);
 void abdlop_params_to_flint(
     abdlop_params_flint_t dst,
     const abdlop_params_t src,
-    fq_nmod_ctx_t ring
+    fq_default_ctx_t ring,
+    fmpz_mod_ctx_t mod_ctx
 );
 
 void fq_nmod_mat_addmul(fq_nmod_mat_t r, fq_nmod_mat_t a, fq_nmod_mat_t b, fq_nmod_ctx_t ctx);
 
 void abdlop_commit_flint(
-    fq_nmod_mat_t ta1,
-    fq_nmod_mat_t ta2,
-    fq_nmod_mat_t tb,
-    fq_nmod_mat_t s1,
-    fq_nmod_mat_t m,
-    fq_nmod_mat_t s2,
-    fq_nmod_mat_t a1,
-    fq_nmod_mat_t a2prime,
-    fq_nmod_mat_t bprime,
-    fq_nmod_ctx_t ctx,
-    abdlop_params_flint_t params
+    fq_default_mat_t tA1,
+    fq_default_mat_t tA2,
+    fq_default_mat_t tB,
+    fq_default_mat_t s1,
+    fq_default_mat_t m,
+    fq_default_mat_t s2,
+    fq_default_mat_t A1,
+    fq_default_mat_t A2prime,
+    fq_default_mat_t Bprime,
+    const abdlop_params_flint_t params
 );
 void abdlop_commit_flint2 (
     polyvec_t tA1,
@@ -79,4 +82,19 @@ void abdlop_commit_flint2 (
     polymat_t A2prime,
     polymat_t Bprime,
     const abdlop_params_t params
+);
+
+void abdlop_keygen_flint(
+    fq_default_mat_t A1,
+    fq_default_mat_t A2prime,
+    fq_default_mat_t Bprime,
+    const uint8_t seed[32],
+    abdlop_params_flint_t params
+);
+void abdlop_keygen_flint2(
+    polymat_t A1,
+    polymat_t A2prime,
+    polymat_t Bprime,
+    const uint8_t seed[32],
+    abdlop_params_t params
 );
