@@ -1,3 +1,8 @@
+#include "flint/abdlop_utils.c"
+#include "flint/abdlop_dcompress.c"
+#include "flint/abdlop_urand.c"
+#include "flint/abdlop_coder.c"
+#include "flint/abdlop_rejection.c"
 #include "flint/abdlop.c"
 #include "abdlop.c"
 #include "aes256ctr-amd64.c"

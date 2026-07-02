@@ -50,13 +50,6 @@ typedef abdlop_params_flint_struct abdlop_params_flint_t[1];
 
 void polymat_to_fq_mat(polymat_t src, fq_nmod_mat_t dst, fq_nmod_ctx_t ctx);
 void polyvec_to_fq_mat(polyvec_t src, fq_default_mat_t dst, fq_default_ctx_t ctx);
-void abdlop_params_to_flint(
-    abdlop_params_flint_t dst,
-    const abdlop_params_t src,
-    fq_default_ctx_t ring,
-    fmpz_mod_ctx_t mod_ctx
-);
-
 void fq_nmod_mat_addmul(fq_nmod_mat_t r, fq_nmod_mat_t a, fq_nmod_mat_t b, fq_nmod_ctx_t ctx);
 
 void abdlop_commit_flint(
@@ -96,5 +89,27 @@ void abdlop_keygen_flint2(
     polymat_t A2prime,
     polymat_t Bprime,
     const uint8_t seed[32],
-    abdlop_params_t params
+    const abdlop_params_t params
 );
+
+void abdlop_prove_flint(
+    uint8_t hash[32],
+    fmpz_mod_poly_t c,
+    fq_default_mat_t z1,
+    fq_default_mat_t z21,
+    fq_default_mat_t h,
+    fq_default_mat_t tA2,
+    fq_default_mat_t s1,
+    fq_default_mat_t s2,
+    fq_default_mat_t A1,
+    fq_default_mat_t A2prime,
+    const uint8_t seed[32],
+    abdlop_params_flint_t params
+);
+
+// Include split modular headers
+#include "abdlop_utils.h"
+#include "abdlop_dcompress.h"
+#include "abdlop_urand.h"
+#include "abdlop_coder.h"
+#include "abdlop_rejection.h"

@@ -426,7 +426,12 @@ LIBSOURCES = \
  src/urandom.h \
  src/urandom.c \
  src/version.c \
- src/flint/abdlop.c
+ src/flint/abdlop.c \
+ src/flint/abdlop_utils.c \
+ src/flint/abdlop_dcompress.c \
+ src/flint/abdlop_urand.c \
+ src/flint/abdlop_coder.c \
+ src/flint/abdlop_rejection.c
 
 #src/ntt.c \
 #src/ntt.h \
