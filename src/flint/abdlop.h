@@ -114,6 +114,18 @@ void abdlop_hashcomm_flint(
     abdlop_params_flint_t params
 );
 
+int abdlop_verify_flint(
+    uint8_t hash[32],
+    fmpz_mod_poly_t c,
+    fq_default_mat_t z1,
+    fq_default_mat_t z21,
+    fq_default_mat_t h,
+    fq_default_mat_t tA1,
+    fq_default_mat_t A1,
+    fq_default_mat_t A2prime,
+    const abdlop_params_flint_t params
+);
+
 // Include split modular headers
 #include "abdlop_utils.h"
 #include "abdlop_dcompress.h"

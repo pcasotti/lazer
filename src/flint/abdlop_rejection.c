@@ -222,3 +222,65 @@ void polyvec_l2sqr_flint(
     fmpz_mod_poly_clear(poly_elem, mod_ctx);
     fq_default_clear(mat_entry, ctx);
 }
+
+void fq_default_mat_linf_flint(
+    fmpz_t r,
+    const fq_default_mat_t a,
+    const fq_default_ctx_t ctx,
+    const fmpz_mod_ctx_t mod_ctx
+) {
+    slong nrows = fq_default_mat_nrows(a, ctx);
+
+    fmpz_set_ui(r, 0); // Initialize accumulator r = 0
+
+    // Set up modulus details to center coefficients correctly around zero
+    fmpz_t q, q_half, centered_c, abs_c;
+    fmpz_init(q);
+    fmpz_init(q_half);
+    fmpz_init(centered_c);
+    fmpz_init(abs_c);
+
+    fmpz_set(q, fmpz_mod_ctx_modulus(mod_ctx));
+    fmpz_fdiv_q_2exp(q_half, q, 1); // q_half = q / 2
+
+    // Temporary workspace structures
+    fmpz_mod_poly_t poly_elem;
+    fmpz_mod_poly_init(poly_elem, mod_ctx);
+
+    fq_default_t mat_entry;
+    fq_default_init2(mat_entry, ctx);
+
+    // Loop through each polynomial element in the vector (column 0)
+    for (slong i = 0; i < nrows; i++) {
+        // 1. Extract the polynomial from the matrix row
+        fq_default_mat_entry(mat_entry, a, i, 0, ctx);
+        fq_default_get_fmpz_mod_poly(poly_elem, mat_entry, ctx);
+
+        // 2. Loop through every coefficient inside the polynomial
+        slong deg = fmpz_mod_poly_length(poly_elem, mod_ctx);
+        for (slong j = 0; j < deg; j++) {
+            fmpz_mod_poly_get_coeff_fmpz(centered_c, poly_elem, j, mod_ctx);
+
+            // 3. Center the unsigned coefficient to the signed range: [-(q-1)/2, (q-1)/2]
+            if (fmpz_cmp(centered_c, q_half) > 0) {
+                fmpz_sub(centered_c, centered_c, q);
+            }
+
+            // 4. Get absolute value
+            fmpz_abs(abs_c, centered_c);
+
+            // 5. Update max if needed
+            if (fmpz_cmp(abs_c, r) > 0) {
+                fmpz_set(r, abs_c);
+            }
+        }
+    }
+
+    // Memory cleanup
+    fmpz_clear(q);
+    fmpz_clear(q_half);
+    fmpz_clear(centered_c);
+    fmpz_clear(abs_c);
+    fmpz_mod_poly_clear(poly_elem, mod_ctx);
+    fq_default_clear(mat_entry, ctx);
+}

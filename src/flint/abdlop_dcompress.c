@@ -270,6 +270,38 @@ void fmpz_mod_poly_dcompress_make_ghint(
     fmpz_clear(q_half);
 }
 
+void fmpz_mod_poly_dcompress_use_ghint(
+    fmpz_mod_poly_t ret,
+    const fmpz_mod_poly_t y,
+    fmpz_mod_poly_t r,
+    const abdlop_params_flint_t params
+) {
+    fmpz_mod_poly_t r1, r0;
+    fmpz_mod_poly_init(r1, params->mod_ctx);
+    fmpz_mod_poly_init(r0, params->mod_ctx);
+
+    fmpz_mod_poly_dcompress_decompose(r1, r0, r, params);
+    fmpz_mod_poly_add(ret, r1, y, params->mod_ctx);
+
+    // Reduce each coefficient modulo m
+    fmpz_t coeff;
+    fmpz_init(coeff);
+
+    slong len = fmpz_mod_poly_length(ret, params->mod_ctx);
+    for (slong i = 0; i < len; i++) {
+        fmpz_mod_poly_get_coeff_fmpz(coeff, ret, i, params->mod_ctx);
+        fmpz_fdiv_r(coeff, coeff, params->dcompress->m);
+        if (fmpz_sgn(coeff) < 0) {
+            fmpz_add(coeff, coeff, params->dcompress->m);
+        }
+        fmpz_mod_poly_set_coeff_fmpz(ret, i, coeff, params->mod_ctx);
+    }
+
+    fmpz_clear(coeff);
+    fmpz_mod_poly_clear(r1, params->mod_ctx);
+    fmpz_mod_poly_clear(r0, params->mod_ctx);
+}
+
 void fq_default_mat_dcompress_make_ghint(
     fq_default_mat_t ret,
     const fq_default_mat_t z,
@@ -304,6 +336,44 @@ void fq_default_mat_dcompress_make_ghint(
         fq_default_clear(re, params->ring);
         fmpz_mod_poly_clear(retp, params->mod_ctx);
         fmpz_mod_poly_clear(zp, params->mod_ctx);
+        fmpz_mod_poly_clear(rp, params->mod_ctx);
+    }
+}
+
+void fq_default_mat_dcompress_use_ghint(
+    fq_default_mat_t ret,
+    const fq_default_mat_t y,
+    const fq_default_mat_t r,
+    const abdlop_params_flint_t params
+) {
+    for (slong i = 0; i < fq_default_mat_nrows(ret, params->ring); i++) {
+        fq_default_t rete, ye, re;
+        fmpz_mod_poly_t retp, yp, rp;
+        fq_default_init2(rete, params->ring);
+        fq_default_init2(ye, params->ring);
+        fq_default_init2(re, params->ring);
+        fmpz_mod_poly_init(retp, params->mod_ctx);
+        fmpz_mod_poly_init(yp, params->mod_ctx);
+        fmpz_mod_poly_init(rp, params->mod_ctx);
+
+        fq_default_mat_entry(rete, ret, i, 0, params->ring);
+        fq_default_mat_entry(ye, y, i, 0, params->ring);
+        fq_default_mat_entry(re, r, i, 0, params->ring);
+
+        fq_default_get_fmpz_mod_poly(retp, rete, params->ring);
+        fq_default_get_fmpz_mod_poly(yp, ye, params->ring);
+        fq_default_get_fmpz_mod_poly(rp, re, params->ring);
+
+        fmpz_mod_poly_dcompress_use_ghint(retp, yp, rp, params);
+
+        fq_default_set_fmpz_mod_poly(rete, retp, params->ring);
+        fq_default_mat_entry_set(ret, i, 0, rete, params->ring);
+
+        fq_default_clear(rete, params->ring);
+        fq_default_clear(ye, params->ring);
+        fq_default_clear(re, params->ring);
+        fmpz_mod_poly_clear(retp, params->mod_ctx);
+        fmpz_mod_poly_clear(yp, params->mod_ctx);
         fmpz_mod_poly_clear(rp, params->mod_ctx);
     }
 }

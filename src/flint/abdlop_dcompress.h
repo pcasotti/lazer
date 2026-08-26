@@ -35,9 +35,23 @@ void fmpz_mod_poly_dcompress_make_ghint(
     const abdlop_params_flint_t params
 );
 
+void fmpz_mod_poly_dcompress_use_ghint(
+    fmpz_mod_poly_t ret,
+    const fmpz_mod_poly_t y,
+    fmpz_mod_poly_t r,
+    const abdlop_params_flint_t params
+);
+
 void fq_default_mat_dcompress_make_ghint(
     fq_default_mat_t ret,
     const fq_default_mat_t z,
+    const fq_default_mat_t r,
+    const abdlop_params_flint_t params
+);
+
+void fq_default_mat_dcompress_use_ghint(
+    fq_default_mat_t ret,
+    const fq_default_mat_t y,
     const fq_default_mat_t r,
     const abdlop_params_flint_t params
 );

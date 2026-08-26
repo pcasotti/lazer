@@ -365,15 +365,17 @@ test_abdlop_flint (uint8_t seed[32], const abdlop_params_t params)
 
   memcpy (hashv, seed, 32);
   abdlop_hashcomm_flint(hashv, ta1, tb, fparams);
-  // start = clock();
+
+  start = clock();
+  b = abdlop_verify_flint(hashv, mc, mz1, mz21, mh, ta1, a1, a2prime, fparams);
   // b = abdlop_verify (hashv, c, z1, z21, h, tA1, A1, A2prime, params);
-  // end = clock();
-  // printf("Lazer Verify: %f ms\n", (double)(end - start) * 1000.0 / CLOCKS_PER_SEC);
-  // TEST_EXPECT (b == 1);
-  // TEST_EXPECT (memcmp (hashp, hashv, 32) == 0);
-  //
-  // memcpy (hashcomm, seed, 32);
-  // abdlop_hashcomm (hashcomm, tA1, tB, params);
+  end = clock();
+  printf("Flint Verify: %f ms\n", (double)(end - start) * 1000.0 / CLOCKS_PER_SEC);
+  TEST_EXPECT (b == 1);
+  TEST_EXPECT (memcmp (hashp, hashv, 32) == 0);
+
+  memcpy (hashcomm, seed, 32);
+  abdlop_hashcomm (hashcomm, tA1, tB, params);
 
   // for (i = 0; i < 10; i++)
   //   {

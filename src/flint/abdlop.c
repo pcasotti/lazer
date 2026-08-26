@@ -471,3 +471,141 @@ void abdlop_commit_flint2 (
     abdlop_params_to_flint(fparams, params, ctx, mod_ctx);
     abdlop_commit_flint(ta1, ta2, tb, ms1, mm, ms2, a1, a2prime, bprime, fparams);
 }
+
+int abdlop_verify_flint(
+    uint8_t hash[32],
+    fmpz_mod_poly_t c,
+    fq_default_mat_t z1,
+    fq_default_mat_t z21,
+    fq_default_mat_t h,
+    fq_default_mat_t tA1,
+    fq_default_mat_t A1,
+    fq_default_mat_t A2prime,
+    const abdlop_params_flint_t params
+) {
+    slong kmsis = params->kmsis;
+    slong m1 = params->m1;
+    slong log2m = params->dcompress->log2m;
+
+    fmpz_mod_poly_t modulus_poly;
+    fmpz_mod_poly_init(modulus_poly, params->mod_ctx);
+    fq_default_ctx_modulus(modulus_poly, params->ring);
+    slong d = fmpz_mod_poly_length(modulus_poly, params->mod_ctx) - 1;
+    fmpz_mod_poly_clear(modulus_poly, params->mod_ctx);
+
+    fq_default_mat_t w1, tmp1;
+    fq_default_mat_init(w1, kmsis, 1, params->ring);
+    fq_default_mat_init(tmp1, kmsis, 1, params->ring);
+
+    fmpz_t l2sqr, bnd, tmp;
+    fmpz_init(l2sqr);
+    fmpz_init(bnd);
+    fmpz_init(tmp);
+
+    fq_default_t cd;
+    fq_default_init2(cd, params->ring);
+
+    fq_default_mat_t tmp_mul;
+    fq_default_mat_init(tmp_mul, kmsis, 1, params->ring);
+
+    coder_state_t cstate;
+    unsigned int outlen;
+    uint8_t out[CEIL(log2m * d * kmsis, 8) + 1];
+    uint8_t cseed[32];
+    fmpz_mod_poly_t c2;
+    fmpz_mod_poly_init(c2, params->mod_ctx);
+
+    shake128_state_t hstate;
+    int b, accept = 0;
+
+    /* recover w1 */
+    fq_default_mat_mul(tmp_mul, A1, z1, params->ring);
+    fq_default_mat_set(tmp1, tmp_mul, params->ring);
+    fq_default_mat_mul(tmp_mul, A2prime, z21, params->ring);
+    fq_default_mat_add(tmp1, tmp1, tmp_mul, params->ring);
+
+    fmpz_mod_poly_t c_poly;
+    fmpz_mod_poly_init(c_poly, params->mod_ctx);
+    fq_default_get_fmpz_mod_poly(c_poly, cd, params->ring);
+    fq_default_set_fmpz_mod_poly(cd, c, params->ring);
+
+    fq_default_mat_scalar_mul(tmp_mul, tA1, cd, params->ring);
+    fq_default_mat_sub(tmp1, tmp1, tmp_mul, params->ring);
+
+    fq_default_mat_dcompress_use_ghint(w1, h, tmp1, params);
+
+    /* recover challenge from w1 */
+    coder_enc_begin(cstate, out);
+    coder_enc_urandom3_flint(
+        cstate,
+        w1,
+        params->ring,
+        params->mod_ctx,
+        params->dcompress->m,
+        log2m
+    );
+    coder_enc_end(cstate);
+
+    outlen = coder_get_offset(cstate);
+    ASSERT_ERR(outlen % 8 == 0);
+    ASSERT_ERR(outlen / 8 <= CEIL(log2m * d * kmsis, 8) + 1);
+    outlen >>= 3;
+
+    shake128_init(hstate);
+    shake128_absorb(hstate, hash, 32);
+    shake128_absorb(hstate, out, outlen);
+    shake128_squeeze(hstate, cseed, 32);
+
+    fmpz_mod_poly_urand_autostable(c2, d, params->mod_ctx, params->omega, params->log2omega, cseed, 0);
+
+    b = fmpz_mod_poly_equal(c, c2, params->mod_ctx);
+    if (!b) goto ret;
+
+    /* check bounds */
+    fmpz_set_ui(tmp, 400);
+    fmpz_set_ui(bnd, 2 * m1 * d * 962);
+    fmpz_mul_2exp(bnd, bnd, 2 * params->log2stdev1);
+    fmpz_fdiv_q(bnd, bnd, tmp);
+
+    polyvec_l2sqr_flint(l2sqr, z1, params->ring, params->mod_ctx);
+    b = fmpz_cmp(l2sqr, bnd) <= 0;
+    if (!b) goto ret;
+
+    fmpz_mod_poly_t gamma_poly;
+    fmpz_mod_poly_init(gamma_poly, params->mod_ctx);
+    fmpz_mod_poly_set_fmpz(gamma_poly, params->dcompress->gamma, params->mod_ctx);
+
+    fq_default_t g;
+    fq_default_init2(g, params->ring);
+    fq_default_set_fmpz_mod_poly(g, gamma_poly, params->ring);
+    fmpz_mod_poly_clear(gamma_poly, params->mod_ctx);
+
+    fq_default_mat_scalar_mul(tmp1, w1, g, params->ring);
+    fq_default_clear(g, params->ring);
+
+    polyvec_l2sqr_flint(l2sqr, tmp1, params->ring, params->mod_ctx);
+    b = fmpz_cmp(l2sqr, params->Bsqr) <= 0;
+    if (!b) goto ret;
+
+    /* 2*linf(h) <= m */
+    fq_default_mat_linf_flint(tmp, h, params->ring, params->mod_ctx);
+    b = fmpz_cmp(tmp, params->dcompress->m) <= 0;
+    if (!b) goto ret;
+
+    /* update fiat-shamir hash */
+    memcpy(hash, cseed, 32);
+    accept = 1;
+
+ret:
+    shake128_clear(hstate);
+    fq_default_mat_clear(w1, params->ring);
+    fq_default_mat_clear(tmp1, params->ring);
+    fq_default_mat_clear(tmp_mul, params->ring);
+    fq_default_clear(cd, params->ring);
+    fmpz_clear(l2sqr);
+    fmpz_clear(bnd);
+    fmpz_clear(tmp);
+    fmpz_mod_poly_clear(c2, params->mod_ctx);
+    fmpz_mod_poly_clear(c_poly, params->mod_ctx);
+    return accept;
+}

@@ -13,8 +13,15 @@ int rej_standard_flint(
 );
 
 void polyvec_l2sqr_flint(
-    fmpz_t r, 
-    const fq_default_mat_t a, 
+    fmpz_t r,
+    const fq_default_mat_t a,
+    const fq_default_ctx_t ctx,
+    const fmpz_mod_ctx_t mod_ctx
+);
+
+void fq_default_mat_linf_flint(
+    fmpz_t r,
+    const fq_default_mat_t a,
     const fq_default_ctx_t ctx,
     const fmpz_mod_ctx_t mod_ctx
 );
