@@ -12,6 +12,25 @@ void fmpz_mod_poly_urand(
     uint64_t dom
 );
 
+void fmpz_mod_poly_grand(
+    fmpz_mod_poly_t r,
+    slong len,
+    fmpz_mod_ctx_t ctx,
+    unsigned int log2o,
+    const uint8_t seed[32],
+    uint64_t dom
+);
+
+void fmpz_mod_poly_urand_autostable(
+    fmpz_mod_poly_t r,
+    slong len,
+    fmpz_mod_ctx_t ctx,
+    int64_t bnd,
+    unsigned int log2,
+    const uint8_t seed[32],
+    uint64_t dom
+);
+
 void fq_default_mat_urand(
     fq_default_mat_t r,
     fq_default_ctx_t ctx,

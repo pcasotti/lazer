@@ -1,4 +1,4 @@
-#include "flint/abdlop.h"
+#include "src/flint/abdlop.h"
 #include "lazer.h"
 #include <time.h>
 
@@ -56,13 +56,13 @@ abdlop_keygen (polymat_t A1, polymat_t A2prime, polymat_t Bprime,
     {
       polymat_urandom (A1, q, log2q, seed, 0);
       polymat_urandom (A2prime, q, log2q, seed, 1);
-      polymat_redp(A1, A1); printf("\n"); polymat_dump(A1); printf("\n");
-      polymat_redp(A2prime, A2prime); printf("\n"); polymat_dump(A2prime); printf("\n");
+      // polymat_redp(A1, A1); printf("\n"); polymat_dump(A1); printf("\n");
+      // polymat_redp(A2prime, A2prime); printf("\n"); polymat_dump(A2prime); printf("\n");
     }
 
   if (l_ > 0) {
     polymat_urandom (Bprime, q, log2q, seed, 2);
-    polymat_redp(Bprime, Bprime); printf("\n"); polymat_dump(Bprime); printf("\n");
+    // polymat_redp(Bprime, Bprime); printf("\n"); polymat_dump(Bprime); printf("\n");
   }
 }
 
@@ -94,9 +94,6 @@ abdlop_commit (polyvec_t tA1, polyvec_t tA2, polyvec_t tB, polyvec_t s1,
                polyvec_t m, polyvec_t s2, polymat_t A1, polymat_t A2prime,
                polymat_t Bprime, const abdlop_params_t params)
 {
-  abdlop_commit_flint2(tA1, tA2, tB, s1, m, s2, A1, A2prime, Bprime, params);
-  clock_t start = clock();
-
 #if ASSERT == ASSERT_ENABLED
   polyring_srcptr Rq = params->ring;
   const unsigned int lext = params->lext;
@@ -134,6 +131,9 @@ abdlop_commit (polyvec_t tA1, polyvec_t tA2, polyvec_t tB, polyvec_t s1,
 
   polyvec_get_subvec (s21, s2, 0, m2 - kmsis, 1);
   polyvec_get_subvec (s22, s2, m2 - kmsis, kmsis, 1);
+  // polyvec_redp(s2, s2); printf("\n"); polyvec_dump(s2); printf("\n");
+  // polyvec_redp(s21, s21); printf("\n"); polyvec_dump(s21); printf("\n");
+  // polyvec_redp(s22, s22); printf("\n"); polyvec_dump(s22); printf("\n");
 
   if (m1 > 0)
     {
@@ -161,9 +161,6 @@ abdlop_commit (polyvec_t tA1, polyvec_t tA2, polyvec_t tB, polyvec_t s1,
       polyvec_addmul (tB_, Bprime_, s21, 0);
       polyvec_mod (tB_, tB_);
     }
-
-  clock_t end = clock();
-  printf("Lazer: %f\n", (double)(end-start));
 }
 
 void

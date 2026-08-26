@@ -1,7 +1,9 @@
 #include "abdlop.h"
 #include "src/dom.h"
+#include "src/flint/abdlop_coder.h"
 #include "src/intvec.h"
 #include "src/urandom.h"
+#include <flint/fmpz_extras.h>
 #include <mpfr.h>
 #include <flint/flint.h>
 #include <flint/fq_default.h>
@@ -30,7 +32,6 @@ void abdlop_commit_flint(
     fq_default_mat_t Bprime,
     const abdlop_params_flint_t params
 ) {
-    clock_t start = clock();
     // Extract parameters
     fq_default_ctx_struct *ctx = params->ring;
     const unsigned int kmsis = params->kmsis;
@@ -89,12 +90,98 @@ void abdlop_commit_flint(
         fq_default_mat_window_clear(Bprime_sub, ctx);
     }
 
-    clock_t end = clock();
-    printf("Flint: %f\n", (double)(end-start));
-
     // Final Cleanup
     fq_default_mat_window_clear(s21, ctx);
     fq_default_mat_window_clear(s22, ctx);
+}
+
+void abdlop_enccomm_flint(
+    uint8_t *buf,
+    size_t *buflen,
+    fq_default_mat_t tA1,
+    fq_default_mat_t tB,
+    abdlop_params_flint_t params
+) {
+  slong log2q = fmpz_clog_ui(params->dcompress->qminus1, 2);
+  const unsigned int d = fq_default_ctx_degree(params->ring);
+  const unsigned int D = params->dcompress->D;
+  const unsigned int kmsis = params->kmsis;
+  const unsigned int m1 = params->m1;
+  const unsigned int l = params->l;
+
+  coder_state_t cstate;
+  fq_default_mat_t tb_;
+  const unsigned int len
+      = CEIL (kmsis * d * (log2q - D) + l * d * log2q, 8) + 1;
+
+  if (buflen != NULL)
+    *buflen = len;
+
+  if (buf == NULL)
+    return;
+
+  coder_enc_begin (cstate, buf);
+  if (m1 > 0) {
+      fmpz_t mod;
+      fmpz_init(mod);
+      fq_default_ctx_prime(mod, params->ring);
+
+      fmpz_set_ui(mod, 1);
+      fmpz_mul_2exp(mod, mod, log2q - D);
+
+      coder_enc_urandom3_flint(
+          cstate,
+          tA1,
+          params->ring,
+          params->mod_ctx,
+          params->dcompress->m,
+          log2q - D
+      );
+  }
+
+  if (l > 0) {
+      fq_default_mat_window_init(tb_, tB, 0, 0, l, 1, params->ring);
+      coder_enc_urandom3_flint(
+          cstate,
+          tb_,
+          params->ring,
+          params->mod_ctx,
+          params->dcompress->m,
+          log2q
+      );
+  }
+
+  coder_enc_end (cstate);
+}
+
+void abdlop_hashcomm_flint(
+    uint8_t hash[32],
+    fq_default_mat_t ta1,
+    fq_default_mat_t tb,
+    abdlop_params_flint_t params
+) {
+    slong log2q = fmpz_clog_ui(params->dcompress->qminus1, 2);
+    const unsigned int d = fq_default_ctx_degree(params->ring);
+    const unsigned int D = params->dcompress->D;
+    const unsigned int kmsis = params->kmsis;
+    const unsigned int l = params->l;
+    shake128_state_t hstate;
+    const size_t outlen = CEIL (kmsis * d * (log2q - D) + l * d * log2q, 8) + 1;
+    uint8_t out[outlen];
+
+    abdlop_enccomm_flint(
+        out,
+        NULL,
+        ta1,
+        tb,
+        params
+    );
+
+    shake128_init (hstate);
+    shake128_absorb (hstate, hash, 32);
+    shake128_absorb (hstate, out, outlen);
+    shake128_squeeze (hstate, hash, 32);
+    shake128_clear (hstate);
 }
 
 void abdlop_prove_flint(
@@ -115,7 +202,12 @@ void abdlop_prove_flint(
     slong m1 = params->m1;
     slong m2 = params->m2;
     slong log2m = params->dcompress->log2m;
-    slong d = params->dcompress->D;
+
+    fmpz_mod_poly_t modulus_poly;
+    fmpz_mod_poly_init(modulus_poly, params->mod_ctx);
+    fq_default_ctx_modulus(modulus_poly, params->ring);
+    slong d = fmpz_mod_poly_length(modulus_poly, params->mod_ctx) - 1;
+    fmpz_mod_poly_clear(modulus_poly, params->mod_ctx);
 
     fq_default_mat_t y1, y2, cs1, cs2, w, w1, w0;
     fq_default_mat_init(y1, m1, 1, params->ring);
@@ -129,6 +221,7 @@ void abdlop_prove_flint(
     fq_default_mat_t s21, s22;
     fq_default_mat_t y21, y22;
 
+    // Correct Window initializations over parent matrices
     fq_default_mat_window_init(s21, s2, 0, 0, m2 - kmsis, 1, params->ring);
     fq_default_mat_window_init(s22, s2, m2 - kmsis, 0, m2, 1, params->ring);
 
@@ -143,25 +236,40 @@ void abdlop_prove_flint(
 
     coder_state_t cstate;
     unsigned int outlen;
-    uint8_t out[CEIL (log2m * d * kmsis, 8) + 1];
+    uint8_t out[CEIL(log2m * d * kmsis, 8) + 1];
 
     shake128_state_t hstate;
 
     int rej;
 
+    fq_default_t cd;
+    fq_default_init2(cd, params->ring);
+
+    fq_default_mat_t tmp;
+    fq_default_mat_init(tmp, kmsis, 1, params->ring);
+
+    fq_default_mat_t tmp_mul;
+    fq_default_mat_init(tmp_mul, kmsis, 1, params->ring);
+
     uint32_t dom = 0;
     while (1) {
-        // fq_default_mat_grand(y1, params->log2stdev1, yseed, dom);
+        fq_default_mat_grand(y1, params->ring, params->mod_ctx, params->dcompress->q, params->log2stdev1, yseed, dom);
         dom++;
-        // fq_default_mat_grand(y2, params->log2stdev2, yseed, dom);
+        fq_default_mat_grand(y2, params->ring, params->mod_ctx, params->dcompress->q, params->log2stdev2, yseed, dom);
         dom++;
 
-        fq_default_mat_init_set(w, y22, params->ring);
-        fq_default_mat_submul(w, w, A1, y1, params->ring);
-        fq_default_mat_submul(w, w, A2prime, y21, params->ring);
+        // w = y22 + A1*y1 + A2prime*y21
+        fq_default_mat_set(w, y22, params->ring);
+
+        fq_default_mat_mul(tmp_mul, A1, y1, params->ring);
+        fq_default_mat_add(w, w, tmp_mul, params->ring);
+
+        fq_default_mat_mul(tmp_mul, A2prime, y21, params->ring);
+        fq_default_mat_add(w, w, tmp_mul, params->ring);
+
         fq_default_mat_dcompress_decompose(w1, w0, w, params);
 
-        coder_enc_begin (cstate, out);
+        coder_enc_begin(cstate, out);
         coder_enc_urandom3_flint(
             cstate,
             w1,
@@ -170,22 +278,20 @@ void abdlop_prove_flint(
             params->dcompress->m,
             log2m
         );
-        coder_enc_end (cstate);
+        coder_enc_end(cstate);
 
-        outlen = coder_get_offset (cstate);
-        ASSERT_ERR (outlen % 8 == 0);
-        ASSERT_ERR (outlen / 8 <= CEIL (log2m * d * kmsis, 8) + 1);
+        outlen = coder_get_offset(cstate);
+        ASSERT_ERR(outlen % 8 == 0);
+        ASSERT_ERR(outlen / 8 <= CEIL(log2m * d * kmsis, 8) + 1);
         outlen >>= 3; /* nbits to nbytes */
 
-        shake128_init (hstate);
-        shake128_absorb (hstate, hash, 32);
-        shake128_absorb (hstate, out, outlen);
-        shake128_squeeze (hstate, cseed, 32);
+        shake128_init(hstate);
+        shake128_absorb(hstate, hash, 32);
+        shake128_absorb(hstate, out, outlen);
+        shake128_squeeze(hstate, cseed, 32);
 
-        // poly_urandom_autostable (c, params->omega, params->log2omega, cseed, 0);
+        fmpz_mod_poly_urand_autostable(c, d, params->mod_ctx, params->omega, params->log2omega, cseed, 0);
 
-        fq_default_t cd;
-        fq_default_init2(cd, params->ring);
         fq_default_set_fmpz_mod_poly(cd, c, params->ring);
         fq_default_mat_scalar_mul(cs1, s1, cd, params->ring);
         fq_default_mat_scalar_mul(cs2, s2, cd, params->ring);
@@ -217,12 +323,62 @@ void abdlop_prove_flint(
             if (rej) continue;
         }
 
-        fq_default_mat_t tmp;
-        fq_default_mat_init_set(tmp, y22, params->ring);
-        fq_default_mat_scalar_mul(y22, tA2, cd, params->ring);
+        // y22 = y22 - c*tA2 - w0
+        fq_default_mat_scalar_mul(tmp, tA2, cd, params->ring);
         fq_default_mat_sub(y22, y22, tmp, params->ring);
         fq_default_mat_sub(y22, y22, w0, params->ring);
+
+        fmpz_t norm;
+        fmpz_init(norm);
+        polyvec_l2sqr_flint(norm, y2, params->ring, params->mod_ctx);
+        rej = fmpz_cmp(norm, params->Bsqr) > 0;
+        fmpz_clear(norm);
+        if (rej) continue;
+
+        break;
     }
+
+    fmpz_mod_poly_t gamma_poly;
+    fmpz_mod_poly_init(gamma_poly, params->mod_ctx);
+    fmpz_mod_poly_set_fmpz(gamma_poly, params->dcompress->gamma, params->mod_ctx);
+
+    fq_default_t g;
+    fq_default_init2(g, params->ring);
+    fq_default_set_fmpz_mod_poly(g, gamma_poly, params->ring);
+    fmpz_mod_poly_clear(gamma_poly, params->mod_ctx);
+
+    // w1 = gamma * w1 - y22
+    fq_default_mat_scalar_mul(w1, w1, g, params->ring);
+    fq_default_clear(g, params->ring);
+
+    fq_default_mat_sub(w1, w1, y22, params->ring);
+
+    // Write results to output buffers
+    fq_default_mat_set(z1, y1, params->ring);
+    fq_default_mat_set(z21, y21, params->ring);
+
+    fq_default_mat_dcompress_make_ghint(h, y22, w1, params);
+
+    memcpy(hash, cseed, 32);
+
+    /* Clean up resources */
+    shake128_clear(hstate);
+    rng_clear(rngstate);
+    fq_default_mat_clear(y1, params->ring);
+    fq_default_mat_clear(y2, params->ring);
+    fq_default_mat_clear(cs1, params->ring);
+    fq_default_mat_clear(cs2, params->ring);
+    fq_default_mat_clear(w, params->ring);
+    fq_default_mat_clear(w1, params->ring);
+    fq_default_mat_clear(w0, params->ring);
+    fq_default_mat_clear(tmp, params->ring);
+    fq_default_mat_clear(tmp_mul, params->ring);
+    fq_default_clear(cd, params->ring);
+
+    fq_default_mat_window_clear(s21, params->ring);
+    fq_default_mat_window_clear(s22, params->ring);
+    fq_default_mat_window_clear(y21, params->ring);
+    fq_default_mat_window_clear(y22, params->ring);
 }
 
 void abdlop_keygen_flint(
@@ -252,8 +408,8 @@ void abdlop_keygen_flint(
             seed,
             1
         );
-        printf("\n"); fq_default_mat_print_pretty(A1, params->ring); printf("\n");
-        printf("\n"); fq_default_mat_print_pretty(A2prime, params->ring); printf("\n");
+        // printf("\n"); fq_default_mat_print_pretty(A1, params->ring); printf("\n");
+        // printf("\n"); fq_default_mat_print_pretty(A2prime, params->ring); printf("\n");
     }
     if (params->l + params->lext > 0) {
         fq_default_mat_urand(
@@ -265,7 +421,7 @@ void abdlop_keygen_flint(
             seed,
             2
         );
-        printf("\n"); fq_default_mat_print_pretty(Bprime, params->ring); printf("\n");
+        // printf("\n"); fq_default_mat_print_pretty(Bprime, params->ring); printf("\n");
     }
 }
 

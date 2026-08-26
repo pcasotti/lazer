@@ -27,3 +27,18 @@ void fq_default_mat_dcompress_decompose(
     fq_default_mat_t r,
     const abdlop_params_flint_t params
 );
+
+void fmpz_mod_poly_dcompress_make_ghint(
+    fmpz_mod_poly_t ret,
+    const fmpz_mod_poly_t z,
+    const fmpz_mod_poly_t r,
+    const abdlop_params_flint_t params
+);
+
+void fq_default_mat_dcompress_make_ghint(
+    fq_default_mat_t ret,
+    const fq_default_mat_t z,
+    const fq_default_mat_t r,
+    const abdlop_params_flint_t params
+);
+
