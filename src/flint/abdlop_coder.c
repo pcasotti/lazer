@@ -1,5 +1,6 @@
 #include "abdlop_coder.h"
 #include <flint/flint.h>
+#include <flint/fmpz_mod.h>
 #include <flint/fq_default.h>
 #include <flint/fq_default_mat.h>
 #include <flint/fmpz.h>
@@ -9,6 +10,7 @@ static unsigned int uencode_flint(
     uint8_t **byte,
     unsigned int *bit,
     const fmpz_mod_poly_t v,
+    slong degree,
     const fmpz_mod_ctx_t ctx,
     const fmpz_t m,
     unsigned int mbits
@@ -21,7 +23,7 @@ static unsigned int uencode_flint(
 
     _byte[0] &= ~((uint8_t)(~0) << _bit);
 
-    slong len = fmpz_mod_poly_degree(v, ctx);
+    slong len = degree;
     fmpz_t elem;
     fmpz_init(elem);
 
@@ -53,6 +55,7 @@ static unsigned int uencode_flint(
 void coder_enc_urandom2_flint(
     coder_state_t state,
     fmpz_mod_poly_t v,
+    slong degree,
     fmpz_mod_ctx_t ctx,
     const fmpz_t m,
     unsigned int mbits
@@ -61,6 +64,7 @@ void coder_enc_urandom2_flint(
         &(state->out),
         &(state->bit_off),
         v,
+        degree,
         ctx,
         m,
         mbits
@@ -83,7 +87,7 @@ void coder_enc_urandom3_flint(
         fmpz_mod_poly_init(poly, mod_ctx);
         fq_default_mat_entry(elem, v, i, 0, ctx);
         fq_default_get_fmpz_mod_poly(poly, elem, ctx);
-        coder_enc_urandom2_flint(state, poly, mod_ctx, m, mbits);
+        coder_enc_urandom2_flint(state, poly, fq_default_ctx_degree(ctx), mod_ctx, m, mbits);
         fq_default_set_fmpz_mod_poly(elem, poly, ctx);
         fq_default_mat_entry_set(v, i, 0, elem, ctx);
     }
