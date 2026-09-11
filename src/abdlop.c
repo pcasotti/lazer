@@ -1,5 +1,6 @@
 #include "src/flint/abdlop.h"
 #include "lazer.h"
+#include <stdint.h>
 #include <time.h>
 
 /*
@@ -339,8 +340,18 @@ abdlop_prove (uint8_t hash[32], poly_t c, polyvec_t z1, polyvec_t z21,
   rng_urandom (rngstate, yseed, 32);
 
   dom = 0;
+
+  uint64_t total = 0;
+  int n = -1;
+  clock_t start = clock();
   while (1)
     {
+      clock_t end = clock();
+      // printf("Lazer rej: %f ms\n", (double)(end - start) * 1000.0 / CLOCKS_PER_SEC);
+      total += (end - start);
+      n += 1;
+      start = clock();
+
       polyvec_grandom (y1, params->log2stdev1, yseed, dom);
       dom++;
       polyvec_grandom (y2, params->log2stdev2, yseed, dom);
@@ -430,6 +441,8 @@ abdlop_prove (uint8_t hash[32], poly_t c, polyvec_t z1, polyvec_t z21,
   polyvec_free (w);
   polyvec_free (w1);
   polyvec_free (w0);
+
+  printf("Lazer rej avg: %f ms\n", ((double)(total) * 1000.0 / CLOCKS_PER_SEC)/n);
 }
 
 /*

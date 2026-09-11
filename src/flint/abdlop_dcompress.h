@@ -17,7 +17,7 @@ void fq_default_mat_power2round(
 void fmpz_mod_poly_dcompress_decompose(
     fmpz_mod_poly_t r1,
     fmpz_mod_poly_t r0,
-    fmpz_mod_poly_t r,
+    const fmpz_mod_poly_t r,
     const abdlop_params_flint_t params
 );
 

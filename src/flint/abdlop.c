@@ -251,8 +251,22 @@ void abdlop_prove_flint(
     fq_default_mat_t tmp_mul;
     fq_default_mat_init(tmp_mul, kmsis, 1, params->ring);
 
+    fmpz_t norm;
+    fmpz_init(norm);
+
     uint32_t dom = 0;
+
+    uint64_t total = 0;
+    int n = -1;
+    clock_t start = clock();
     while (1) {
+        // if (n > -1) break;
+        clock_t end = clock();
+        // printf("Flint rej: %f ms\n", (double)(end - start) * 1000.0 / CLOCKS_PER_SEC);
+        total += (end - start);
+        n += 1;
+        start = clock();
+
         fq_default_mat_grand(y1, params->ring, params->mod_ctx, params->dcompress->q, params->log2stdev1, yseed, dom);
         dom++;
         fq_default_mat_grand(y2, params->ring, params->mod_ctx, params->dcompress->q, params->log2stdev2, yseed, dom);
@@ -328,15 +342,14 @@ void abdlop_prove_flint(
         fq_default_mat_sub(y22, y22, tmp, params->ring);
         fq_default_mat_sub(y22, y22, w0, params->ring);
 
-        fmpz_t norm;
-        fmpz_init(norm);
         polyvec_l2sqr_flint(norm, y2, params->ring, params->mod_ctx);
         rej = fmpz_cmp(norm, params->Bsqr) > 0;
-        fmpz_clear(norm);
         if (rej) continue;
 
         break;
     }
+
+    fmpz_clear(norm);
 
     fmpz_mod_poly_t gamma_poly;
     fmpz_mod_poly_init(gamma_poly, params->mod_ctx);
@@ -379,6 +392,8 @@ void abdlop_prove_flint(
     fq_default_mat_window_clear(s22, params->ring);
     fq_default_mat_window_clear(y21, params->ring);
     fq_default_mat_window_clear(y22, params->ring);
+
+    printf("Flint rej avg: %f ms\n", ((double)(total) * 1000.0 / CLOCKS_PER_SEC)/n);
 }
 
 void abdlop_keygen_flint(
@@ -490,12 +505,15 @@ int abdlop_verify_flint(
     fmpz_mod_poly_t modulus_poly;
     fmpz_mod_poly_init(modulus_poly, params->mod_ctx);
     fq_default_ctx_modulus(modulus_poly, params->ring);
-    slong d = fmpz_mod_poly_length(modulus_poly, params->mod_ctx) - 1;
+    slong d = fq_default_ctx_degree(params->ring);
     fmpz_mod_poly_clear(modulus_poly, params->mod_ctx);
 
     fq_default_mat_t w1, tmp1;
     fq_default_mat_init(w1, kmsis, 1, params->ring);
     fq_default_mat_init(tmp1, kmsis, 1, params->ring);
+
+    fmpz_mod_poly_t tmp2;
+    fmpz_mod_poly_init(tmp2, params->mod_ctx);
 
     fmpz_t l2sqr, bnd, tmp;
     fmpz_init(l2sqr);
@@ -524,10 +542,8 @@ int abdlop_verify_flint(
     fq_default_mat_mul(tmp_mul, A2prime, z21, params->ring);
     fq_default_mat_add(tmp1, tmp1, tmp_mul, params->ring);
 
-    fmpz_mod_poly_t c_poly;
-    fmpz_mod_poly_init(c_poly, params->mod_ctx);
-    fq_default_get_fmpz_mod_poly(c_poly, cd, params->ring);
-    fq_default_set_fmpz_mod_poly(cd, c, params->ring);
+    fmpz_mod_poly_scalar_mul_fmpz(tmp2, c, params->dcompress->pow2D, params->mod_ctx);
+    fq_default_set_fmpz_mod_poly(cd, tmp2, params->ring);
 
     fq_default_mat_scalar_mul(tmp_mul, tA1, cd, params->ring);
     fq_default_mat_sub(tmp1, tmp1, tmp_mul, params->ring);
@@ -571,17 +587,8 @@ int abdlop_verify_flint(
     b = fmpz_cmp(l2sqr, bnd) <= 0;
     if (!b) goto ret;
 
-    fmpz_mod_poly_t gamma_poly;
-    fmpz_mod_poly_init(gamma_poly, params->mod_ctx);
-    fmpz_mod_poly_set_fmpz(gamma_poly, params->dcompress->gamma, params->mod_ctx);
-
-    fq_default_t g;
-    fq_default_init2(g, params->ring);
-    fq_default_set_fmpz_mod_poly(g, gamma_poly, params->ring);
-    fmpz_mod_poly_clear(gamma_poly, params->mod_ctx);
-
-    fq_default_mat_scalar_mul(tmp1, w1, g, params->ring);
-    fq_default_clear(g, params->ring);
+    fq_default_mat_scalar_mul_fmpz(tmp_mul, w1, params->dcompress->gamma, params->ring);
+    fq_default_mat_sub(tmp1, tmp1, tmp_mul, params->ring);
 
     polyvec_l2sqr_flint(l2sqr, tmp1, params->ring, params->mod_ctx);
     b = fmpz_cmp(l2sqr, params->Bsqr) <= 0;
@@ -606,6 +613,5 @@ ret:
     fmpz_clear(bnd);
     fmpz_clear(tmp);
     fmpz_mod_poly_clear(c2, params->mod_ctx);
-    fmpz_mod_poly_clear(c_poly, params->mod_ctx);
     return accept;
 }

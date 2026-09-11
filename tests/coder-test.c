@@ -1,4 +1,6 @@
+#include "abdlop-params1.h"
 #include "test.h"
+#include "src/flint/abdlop.h"
 
 #define LIMB0(x) ((x)->limbs[0])
 #define LIMB1(x) ((x)->limbs[1])
@@ -12,6 +14,7 @@ static void encode (void);
 static void encode_uniform (void);
 static void encode_gaussian (void);
 static void encode_ghint (void);
+static void encode_flint (void);
 
 int
 main (void)
@@ -22,8 +25,78 @@ main (void)
   encode_uniform ();
   encode_gaussian ();
   encode_ghint ();
+  encode_flint ();
 
   TEST_PASS ();
+}
+
+/* flint test: fmpz-mod coder encoding matches lazer encoding */
+static void
+encode_flint (void)
+{
+  abdlop_params_srcptr params = params1;
+  polyring_srcptr Rq = params->ring;
+  fq_default_ctx_t ctx;
+  fmpz_mod_ctx_t mod_ctx;
+  abdlop_params_flint_t fparams;
+  fmpz_t modm;
+  fmpz_mod_poly_t fp;
+  polyvec_t pv;
+  fq_default_mat_t minit;
+  INT_T (mi, 1);
+  INTVEC_T (v, Rq->d, 1);
+  poly_t poly;
+  uint8_t seed[32] = { 0 };
+  uint32_t dom = 0;
+  uint8_t buf1[100000], buf2[100000];
+  CODER_STATE_T (s1);
+  CODER_STATE_T (s2);
+  unsigned int nbits1, nbits2;
+  unsigned int i, k;
+
+  polyvec_alloc (pv, Rq, 1);
+  fq_default_mat_init_polyvec (pv, minit, ctx, mod_ctx);
+  abdlop_params_to_flint (fparams, params, ctx, mod_ctx);
+  fq_default_mat_clear (minit, ctx);
+  polyvec_free (pv);
+
+  fmpz_set_ui (modm, 17);
+  int_set_i64 (mi, 17);
+  poly_alloc (poly, Rq);
+  fmpz_mod_poly_init (fp, mod_ctx);
+
+  for (i = 0; i < 1000; i++)
+    {
+      intvec_urandom (v, mi, 5, seed, dom);
+      dom++;
+
+      intvec_set (poly_get_coeffvec (poly), v);
+      fmpz_mod_poly_zero (fp, mod_ctx);
+      for (k = 0; k < Rq->d; k++)
+        {
+          fmpz_t c;
+          fmpz_init (c);
+          fmpz_set_ui (c, intvec_get_elem_i64 (v, k));
+          fmpz_mod_poly_set_coeff_fmpz (fp, k, c, mod_ctx);
+          fmpz_clear (c);
+        }
+
+      coder_enc_begin (s1, buf1);
+      coder_enc_urandom (s1, v, mi, 5);
+      coder_enc_end (s1);
+      nbits1 = coder_get_offset (s1);
+
+      coder_enc_begin (s2, buf2);
+      coder_enc_urandom2_flint (s2, fp, Rq->d, mod_ctx, modm, 5);
+      coder_enc_end (s2);
+      nbits2 = coder_get_offset (s2);
+
+      TEST_EXPECT (nbits1 == nbits2);
+      TEST_EXPECT (memcmp (buf1, buf2, (nbits1 + 7) / 8) == 0);
+    }
+
+  fmpz_mod_poly_clear (fp, mod_ctx);
+  poly_free (poly);
 }
 
 static void

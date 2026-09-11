@@ -16,6 +16,7 @@ void fmpz_mod_poly_grand(
     fmpz_mod_poly_t r,
     slong len,
     fmpz_mod_ctx_t ctx,
+    const fmpz_t mod,
     unsigned int log2o,
     const uint8_t seed[32],
     uint64_t dom

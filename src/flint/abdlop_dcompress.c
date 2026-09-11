@@ -69,61 +69,49 @@ void fq_default_mat_power2round(
 void fmpz_mod_poly_dcompress_decompose(
     fmpz_mod_poly_t r1,
     fmpz_mod_poly_t r0,
-    fmpz_mod_poly_t r,
+    const fmpz_mod_poly_t r,
     const abdlop_params_flint_t params
 ) {
+    fmpz_t r1i, r0i;
+    fmpz_init(r1i);
+    fmpz_init(r0i);
+
     slong len = fmpz_mod_poly_length(r, params->mod_ctx);
 
-    fmpz_t rc, r0c, r1c, one;
-    fmpz_init(rc);
-    fmpz_init(r0c);
-    fmpz_init(r1c);
-    fmpz_init(one);
-    fmpz_set_ui(one, 1);
-
-    fmpz_mod_poly_zero(r1, params->mod_ctx);
-    fmpz_mod_poly_zero(r0, params->mod_ctx);
-
     for (slong i = 0; i < len; i++) {
-        // Read input coefficient
-        fmpz_mod_poly_get_coeff_fmpz(rc, r, i, params->mod_ctx);
+        /* r1 = r mod q, in [0,q) (canonical coefficient of r) */
+        fmpz_mod_poly_get_coeff_fmpz(r1i, r, i, params->mod_ctx);
 
-        // Map r into standard modular range [0, q-1]
-        fmpz_mod(r1c, rc, params->dcompress->q);
+        /* r0 = |r1 mod gamma|, in [0,gamma) */
+        fmpz_mod(r0i, r1i, params->dcompress->gamma);
 
-        // Extract initial low bits r0 = r1 mod 2^D
-        fmpz_fdiv_r_2exp(r0c, r1c, params->dcompress->D);
-
-        // Center r0 into the symmetric interval (-gamma/2, gamma/2]
-        if (fmpz_cmpabs(r0c, params->dcompress->pow2Dby2) > 0) {
-            fmpz_sub(r0c, r0c, params->dcompress->pow2D);
-        }
-
-        // Compute high bits layout: r1 = r1 - r0
-        fmpz_sub(r1c, r1c, r0c);
-
-        // Check the boundary wrap-around condition using params->dcompress->q
-        if (fmpz_equal(r1c, params->dcompress->q)) { 
-            fmpz_zero(r1c);
-            fmpz_sub(r0c, r0c, one);
+        /* center r0 to (-gamma/2, gamma/2] */
+        if (fmpz_sgn(r0i) < 0) {
+            if (fmpz_cmpabs(r0i, params->dcompress->gammaby2) <= 0) {
+                fmpz_add(r0i, r0i, params->dcompress->gamma);
+            }
         } else {
-            // Divide by gamma (2^D) to get final high bits component
-            fmpz_fdiv_q_2exp(r1c, r1c, params->dcompress->D);
+            if (fmpz_cmpabs(r0i, params->dcompress->gammaby2) > 0) {
+                fmpz_sub(r0i, r0i, params->dcompress->gamma);
+            }
         }
 
-        // Map final signed components back to unsigned [0, q-1]
-        fmpz_mod(r0c, r0c, params->dcompress->q);
-        fmpz_mod(r1c, r1c, params->dcompress->q);
+        /* r1 = r' - r0 (exact multiple of gamma) */
+        fmpz_sub(r1i, r1i, r0i);
 
-        // Write directly back to output polynomials
-        fmpz_mod_poly_set_coeff_fmpz(r1, i, r1c, params->mod_ctx);
-        fmpz_mod_poly_set_coeff_fmpz(r0, i, r0c, params->mod_ctx);
+        if (fmpz_equal(r1i, params->dcompress->qminus1)) {
+            fmpz_zero(r1i);
+            fmpz_sub_ui(r0i, r0i, 1);
+        } else {
+            fmpz_divexact(r1i, r1i, params->dcompress->gamma);
+        }
+
+        fmpz_mod_poly_set_coeff_fmpz(r1, i, r1i, params->mod_ctx);
+        fmpz_mod_poly_set_coeff_fmpz(r0, i, r0i, params->mod_ctx);
     }
 
-    fmpz_clear(rc);
-    fmpz_clear(r0c);
-    fmpz_clear(r1c);
-    fmpz_clear(one);
+    fmpz_clear(r1i);
+    fmpz_clear(r0i);
 }
 
 void fq_default_mat_dcompress_decompose(
@@ -163,111 +151,51 @@ void fmpz_mod_poly_dcompress_make_ghint(
     const fmpz_mod_poly_t r,
     const abdlop_params_flint_t params
 ) {
-    fmpz_mod_poly_add(ret, r, z, params->mod_ctx);
+    fmpz_mod_poly_t r1, r0, v0, rz;
+    fmpz_mod_poly_init(r1, params->mod_ctx);
+    fmpz_mod_poly_init(r0, params->mod_ctx);
+    fmpz_mod_poly_init(v0, params->mod_ctx);
+    fmpz_mod_poly_init(rz, params->mod_ctx);
 
-    fmpz_mod_poly_t modulus_poly;
-    fmpz_mod_poly_init(modulus_poly, params->mod_ctx);
-    fq_default_ctx_modulus(modulus_poly, params->ring);
-    slong deg = fmpz_mod_poly_length(modulus_poly, params->mod_ctx) - 1;
-    fmpz_mod_poly_clear(modulus_poly, params->mod_ctx);
+    /* rz = r + z (mod q), decompose both like the original */
+    fmpz_mod_poly_add(rz, r, z, params->mod_ctx);
+    fmpz_mod_poly_dcompress_decompose(r1, r0, r, params);
+    fmpz_mod_poly_dcompress_decompose(rz, v0, rz, params);
 
-    fmpz_t r_c, z_c, ret_c, r1_c, r0_c, v0_c, one, m_by2;
-    fmpz_init(r_c);
-    fmpz_init(z_c);
+    /* h = r1(r+z) - r1(r) (mod q) */
+    fmpz_mod_poly_sub(ret, rz, r1, params->mod_ctx);
+
+    fmpz_t ret_c, m_half, q_half;
     fmpz_init(ret_c);
-    fmpz_init(r1_c);
-    fmpz_init(r0_c);
-    fmpz_init(v0_c);
-    fmpz_init(one);
-    fmpz_set_ui(one, 1);
-    fmpz_init(m_by2);
-    fmpz_set(m_by2, params->dcompress->mby2);
-
-    fmpz_t q_half;
+    fmpz_init(m_half);
+    fmpz_fdiv_q_2exp(m_half, params->dcompress->m, 1);
     fmpz_init(q_half);
     fmpz_fdiv_q_2exp(q_half, params->dcompress->q, 1);
 
+    slong deg = fmpz_mod_poly_length(ret, params->mod_ctx);
     for (slong i = 0; i < deg; i++) {
-        fmpz_mod_poly_get_coeff_fmpz(r_c, r, i, params->mod_ctx);
-        fmpz_mod_poly_get_coeff_fmpz(z_c, z, i, params->mod_ctx);
+        fmpz_mod_poly_get_coeff_fmpz(ret_c, ret, i, params->mod_ctx);
 
-        if (fmpz_cmp(r_c, q_half) > 0) fmpz_sub(r_c, r_c, params->dcompress->q);
-        if (fmpz_cmp(z_c, q_half) > 0) fmpz_sub(z_c, z_c, params->dcompress->q);
-
-        fmpz_add(ret_c, r_c, z_c);
-
-        fmpz_mod(r1_c, r_c, params->dcompress->q);
-        fmpz_fdiv_r_2exp(r0_c, r1_c, params->dcompress->D);
-        if (fmpz_cmpabs(r0_c, params->dcompress->pow2Dby2) > 0) {
-            fmpz_sub(r0_c, r0_c, params->dcompress->pow2D);
-        }
-        fmpz_sub(r1_c, r1_c, r0_c);
-        if (fmpz_equal(r1_c, params->dcompress->q)) {
-            fmpz_zero(r1_c);
-        } else {
-            fmpz_fdiv_q_2exp(r1_c, r1_c, params->dcompress->D);
-        }
-        fmpz_mod(r1_c, r1_c, params->dcompress->q);
-
-        fmpz_mod(ret_c, ret_c, params->dcompress->q);
-        fmpz_fdiv_r_2exp(v0_c, ret_c, params->dcompress->D);
-        if (fmpz_cmpabs(v0_c, params->dcompress->pow2Dby2) > 0) {
-            fmpz_sub(v0_c, v0_c, params->dcompress->pow2D);
-        }
-        fmpz_sub(ret_c, ret_c, v0_c);
-        if (fmpz_equal(ret_c, params->dcompress->q)) {
-            fmpz_zero(ret_c);
-        } else {
-            fmpz_fdiv_q_2exp(ret_c, ret_c, params->dcompress->D);
-        }
-        fmpz_mod(ret_c, ret_c, params->dcompress->q);
-
-        if (fmpz_cmp(r1_c, q_half) > 0) fmpz_sub(r1_c, r1_c, params->dcompress->q);
+        /* signed h, in (-m,m) */
         if (fmpz_cmp(ret_c, q_half) > 0) fmpz_sub(ret_c, ret_c, params->dcompress->q);
 
-        fmpz_sub(ret_c, ret_c, r1_c);
-
+        /* h mod m, in [0,m) */
         fmpz_mod(ret_c, ret_c, params->dcompress->m);
 
-        if (params->dcompress->m_odd) {
-            fmpz_t m_half;
-            fmpz_init(m_half);
-            fmpz_fdiv_q_2exp(m_half, params->dcompress->m, 1);
-            if (fmpz_cmp(ret_c, m_half) > 0) fmpz_sub(ret_c, ret_c, params->dcompress->m);
-            fmpz_clear(m_half);
-        } else {
-            if (fmpz_sgn(ret_c) < 0) {
-                fmpz_t abs_ret;
-                fmpz_init(abs_ret);
-                fmpz_abs(abs_ret, ret_c);
-                if (fmpz_cmp(abs_ret, m_by2) >= 0) {
-                    fmpz_add(ret_c, ret_c, params->dcompress->m);
-                }
-                fmpz_clear(abs_ret);
-            } else {
-                fmpz_t abs_ret;
-                fmpz_init(abs_ret);
-                fmpz_abs(abs_ret, ret_c);
-                if (fmpz_cmp(abs_ret, m_by2) > 0) {
-                    fmpz_sub(ret_c, ret_c, params->dcompress->m);
-                }
-                fmpz_clear(abs_ret);
-            }
-        }
+        /* center: odd -> [-(m-1)/2,(m-1)/2], even -> (-m/2,m/2] */
+        if (fmpz_cmp(ret_c, m_half) > 0) fmpz_sub(ret_c, ret_c, params->dcompress->m);
 
         fmpz_mod(ret_c, ret_c, params->dcompress->q);
         fmpz_mod_poly_set_coeff_fmpz(ret, i, ret_c, params->mod_ctx);
     }
 
-    fmpz_clear(r_c);
-    fmpz_clear(z_c);
     fmpz_clear(ret_c);
-    fmpz_clear(r1_c);
-    fmpz_clear(r0_c);
-    fmpz_clear(v0_c);
-    fmpz_clear(one);
-    fmpz_clear(m_by2);
+    fmpz_clear(m_half);
     fmpz_clear(q_half);
+    fmpz_mod_poly_clear(r1, params->mod_ctx);
+    fmpz_mod_poly_clear(r0, params->mod_ctx);
+    fmpz_mod_poly_clear(v0, params->mod_ctx);
+    fmpz_mod_poly_clear(rz, params->mod_ctx);
 }
 
 void fmpz_mod_poly_dcompress_use_ghint(
@@ -281,23 +209,21 @@ void fmpz_mod_poly_dcompress_use_ghint(
     fmpz_mod_poly_init(r0, params->mod_ctx);
 
     fmpz_mod_poly_dcompress_decompose(r1, r0, r, params);
+
+    /* ret = r1 + y */
     fmpz_mod_poly_add(ret, r1, y, params->mod_ctx);
 
-    // Reduce each coefficient modulo m
+    /* reduce each coefficient modulo m, to [0,m) */
     fmpz_t coeff;
     fmpz_init(coeff);
-
     slong len = fmpz_mod_poly_length(ret, params->mod_ctx);
     for (slong i = 0; i < len; i++) {
         fmpz_mod_poly_get_coeff_fmpz(coeff, ret, i, params->mod_ctx);
-        fmpz_fdiv_r(coeff, coeff, params->dcompress->m);
-        if (fmpz_sgn(coeff) < 0) {
-            fmpz_add(coeff, coeff, params->dcompress->m);
-        }
+        fmpz_mod(coeff, coeff, params->dcompress->m);
         fmpz_mod_poly_set_coeff_fmpz(ret, i, coeff, params->mod_ctx);
     }
-
     fmpz_clear(coeff);
+
     fmpz_mod_poly_clear(r1, params->mod_ctx);
     fmpz_mod_poly_clear(r0, params->mod_ctx);
 }

@@ -1,4 +1,6 @@
+#include "abdlop-params1.h"
 #include "test.h"
+#include "src/flint/abdlop.h"
 #include <math.h>
 
 #define SP_NSAMPLES 5000000
@@ -9,8 +11,12 @@
 
 #define SAMPLEVEC_DIM 4
 
+#define FLINT_NSAMPLES 5000
+#define FLINT_LOG2O 10
+
 static void single_prec (void);
 static void multiple_prec (void);
+static void flint_prec (void);
 
 int
 main (void)
@@ -19,7 +25,77 @@ main (void)
 
   single_prec ();
   multiple_prec ();
+  flint_prec ();
   TEST_PASS ();
+}
+
+/* flint test: fmpz_mod_poly_grand distribution (center-reduced coefficients) */
+static void
+flint_prec (void)
+{
+  const long double sigma = (long double)1.55 * (1 << FLINT_LOG2O);
+  polyring_srcptr Rq = params1->ring;
+  uint8_t seed[32] = { 0 };
+  uint32_t dom = 0;
+  fmpz_t mod;
+  fmpz_mod_ctx_t ctx;
+  fmpz_mod_poly_t poly;
+  fmpz_t q;
+  fmpz_t halfq;
+  fmpz_t coeff;
+  long double sum = 0, sum_sqr = 0;
+  long double empiric_mean, empiric_var;
+  unsigned int i;
+
+  bytes_urandom (seed, sizeof (seed));
+
+  fmpz_init_int (mod, Rq->q);
+  fmpz_init (q);
+  fmpz_init (halfq);
+  fmpz_init (coeff);
+  fmpz_set (q, mod);
+  fmpz_fdiv_q_2exp (halfq, q, 1);
+
+  fmpz_mod_ctx_init (ctx, mod);
+  fmpz_mod_poly_init (poly, ctx);
+
+  for (i = 0; i < FLINT_NSAMPLES; i++)
+    {
+      slong k;
+      int64_t v;
+      fmpz_mod_poly_grand (poly, SAMPLEVEC_DIM, ctx, mod, FLINT_LOG2O, seed,
+                           dom);
+      dom++;
+
+      for (k = 0; k < SAMPLEVEC_DIM; k++)
+        {
+          fmpz_mod_poly_get_coeff_fmpz (coeff, poly, k, ctx);
+          /* center-reduce into [-q/2, q/2) */
+          if (fmpz_cmp (coeff, halfq) > 0)
+            fmpz_sub (coeff, coeff, q);
+          v = fmpz_get_si (coeff);
+          sum += v;
+          sum_sqr += (long double)v * v;
+        }
+    }
+
+  empiric_mean = sum / (FLINT_NSAMPLES * SAMPLEVEC_DIM);
+  empiric_var = sum_sqr / (FLINT_NSAMPLES * SAMPLEVEC_DIM);
+
+  printf ("flint gaussian test\n");
+  printf ("expected variance: %Lf\n", sigma * sigma);
+  printf ("empiric variance:  %Lf\n", empiric_var);
+  printf ("\n");
+
+  TEST_EXPECT (fabsl (empiric_mean) < 35);
+  TEST_EXPECT (fabsl (empiric_var - sigma * sigma) < 100000);
+
+  fmpz_mod_poly_clear (poly, ctx);
+  fmpz_mod_ctx_clear (ctx);
+  fmpz_clear (coeff);
+  fmpz_clear (halfq);
+  fmpz_clear (q);
+  fmpz_clear (mod);
 }
 
 static void

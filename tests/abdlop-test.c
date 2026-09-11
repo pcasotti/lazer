@@ -63,18 +63,21 @@ main (void)
   //     printf("\nTEST 2\n");
   //     bytes_urandom (seed, sizeof (seed));
   //     test_abdlop (seed, params2);
+  //     test_abdlop_flint (seed, params2);
   //   }
   // for (i = 0; i < 1; i++)
   //   {
   //     printf("\nTEST 3\n");
-  //    bytes_urandom (seed, sizeof (seed));
-  //    test_abdlop (seed, params3);
+  //     bytes_urandom (seed, sizeof (seed));
+  //     test_abdlop (seed, params3);
+  //     test_abdlop_flint (seed, params3);
   //   }
   // for (i = 0; i < 1; i++)
   //   {
   //     printf("\nTEST 4\n");
   //     bytes_urandom (seed, sizeof (seed));
   //     test_abdlop (seed, params4);
+  //     test_abdlop_flint (seed, params4);
   //   }
 
   printf("\nTEST_PASS\n");
@@ -183,6 +186,7 @@ test_abdlop (uint8_t seed[32], const abdlop_params_t params)
 
   memcpy (hashv, seed, 32);
   abdlop_hashcomm (hashv, tA1, tB, params);
+
   start = clock();
   b = abdlop_verify (hashv, c, z1, z21, h, tA1, A1, A2prime, params);
   end = clock();
@@ -329,11 +333,6 @@ test_abdlop_flint (uint8_t seed[32], const abdlop_params_t params)
   printf("Flint Prove: %f ms\n", (double)(end - start) * 1000.0 / CLOCKS_PER_SEC);
   printf("Flint Prove hashp: "); for (int i = 0; i < 32; i++) printf("%d ", hashp[i]); printf("\n");
 
-  printf("c: %d\n", compare_poly(c, mc, fparams));
-  printf("z1: %d\n", compare_polyvec(z1, mz1, fparams));
-  printf("z21: %d\n", compare_polyvec(z21, mz21, fparams));
-  printf("h: %d\n", compare_polyvec(h, mh, fparams));
-
   /* expect successful verification */
 
   memcpy (hashv, seed, 32);
@@ -442,6 +441,7 @@ int compare_poly(
     fmpz_mod_poly_get_coeff_fmpz(c, fmpz, i, params->mod_ctx);
 
     fmpz_init_int(c1, poly_get_coeff(poly, i));
+    fmpz_mod(c1, c1, params->dcompress->q);
     if (fmpz_cmp(c1, c) != 0) return 0;
 
     fmpz_clear(c);
