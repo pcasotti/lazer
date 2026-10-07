@@ -1,7 +1,8 @@
 CFLAGS_FALCON_AMD64 = -DFALCON_FPNATIVE -DFALCON_AVX2 -DFALCON_FMA
 CFLAGS_WARN = -Wall -Wextra
-CFLAGS_DEFAULT = $(CFLAGS_WARN) -Og -ggdb3
-CFLAGS_DEBUG = $(CFLAGS_WARN) -Og -ggdb3
+AXFLAGS = -maes -mssse3
+CFLAGS_DEFAULT = $(AXFLAGS) $(CFLAGS_WARN) -Og -ggdb3
+CFLAGS_DEBUG = $(AXFLAGS) $(CFLAGS_WARN) -Og -ggdb3
 ADD_CPPFLAGS = -DNDEBUG
 
 CPPFLAGS += $(ADD_CPPFLAGS)
@@ -32,6 +33,20 @@ ifndef libgmp
 libgmp = -lgmp
 endif
 LIBS += $(libgmp)
+
+# NTL backend (src/arith/backend_ntl.cpp): locate NTL through pkg-config,
+# falling back to a nix-store install when the environment's PKG_CONFIG_PATH
+# does not know about it.  Override NTL_CFLAGS/NTL_LIBS to force a location.
+CXX ?= g++
+NTL_CFLAGS ?= $(shell pkg-config --cflags ntl 2>/dev/null)
+NTL_LIBS ?= $(shell pkg-config --libs ntl 2>/dev/null)
+ifeq ($(strip $(NTL_CFLAGS)),)
+NTL_PC := $(shell ls -d /nix/store/*-ntl-*/lib/pkgconfig 2>/dev/null | head -n1)
+ifneq ($(strip $(NTL_PC)),)
+NTL_CFLAGS := $(shell PKG_CONFIG_PATH="$(NTL_PC)" pkg-config --cflags ntl)
+NTL_LIBS := $(shell PKG_CONFIG_PATH="$(NTL_PC)" pkg-config --libs ntl)
+endif
+endif
 
 .PHONY: default all
 default: lib
@@ -460,6 +475,7 @@ TESTS = \
  tests/grandom-test \
  tests/rejection-test \
  tests/abdlop-test \
+ tests/arith-abdlop-test2 \
  tests/lnp-quad-test \
  tests/lnp-quad-many-test \
  tests/lnp-quad-eval-test \
@@ -524,6 +540,11 @@ TESTLIBS = tests/test.o liblazer.a $(LIBS)
 .PHONY: check
 check: $(TESTS)
 	cd tests && ./run-tests
+
+.PHONY: arith-backend-demo
+arith-backend-demo: demos/arith-backend-demo
+demos/arith-backend-demo: demos/arith-backend-demo.c src/arith/arith.h src/arith/backend_lazer.c src/arith/backend_flint.c $(TESTDEPS)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I. -o $@ $< src/arith/backend_lazer.c src/arith/backend_flint.c $(TESTLIBS)
 
 tests/test.o: tests/test.c tests/test.h lazer.h liblazer.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) -I. -c -o $@ $<
@@ -597,6 +618,31 @@ tests/rejection-test: tests/rejection-test.c $(TESTDEPS)
 tests/abdlop-test: tests/abdlop-test.c $(TESTDEPS) tests/abdlop-params1.h tests/abdlop-params2.h tests/abdlop-params3.h tests/abdlop-params4.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -I. -o $@ $< $(TESTLIBS)
 
+ARITH_BACKEND_LIB = \
+	src/arith/backend_lazer.o \
+	src/arith/backend_flint.o \
+	src/arith/backend_nmod.o \
+	src/arith/backend_ntl.o \
+	src/arith/abdlop_arith.o
+
+src/arith/backend_lazer.o: src/arith/backend_lazer.c src/arith/arith.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -c $<
+
+src/arith/backend_flint.o: src/arith/backend_flint.c src/arith/arith.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -c $<
+
+src/arith/backend_nmod.o: src/arith/backend_nmod.c src/arith/arith.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ -c $<
+
+src/arith/backend_ntl.o: src/arith/backend_ntl.cpp src/arith/arith.h
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) $(NTL_CFLAGS) -std=c++17 -Wall -Wextra -Og -ggdb3 -o $@ -c $<
+
+src/arith/abdlop_arith.o: src/arith/abdlop_arith.c src/arith/abdlop_arith.h src/arith/arith.h lazer.h
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I. -o $@ -c $<
+
+tests/arith-abdlop-test2: tests/arith-abdlop-test2.c $(TESTDEPS) tests/abdlop-params1.h $(ARITH_BACKEND_LIB)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -I. -o $@ $< $(ARITH_BACKEND_LIB) $(TESTLIBS) -lpthread -ldl $(NTL_LIBS) -lm
+
 tests/lnp-quad-test: tests/lnp-quad-test.c $(TESTDEPS) tests/lnp-quad-params1.h tests/lnp-quad-params2.h tests/lnp-quad-params3.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -I. -o $@ $< $(TESTLIBS)
 
@@ -632,7 +678,9 @@ clean:
 	rm -f lazer.h liblazer.a liblazer.so liblabrador.a liblabrador.so liblabrador24.so  liblabrador32.so  liblabrador40.so  liblabrador48.so
 	cd scripts && rm -f moduli.sage.py lnp-codegen.sage.py abdlop-codegen.sage.py lnp-quad-codegen.sage.py lnp-quad-eval-codegen.sage.py lnp-tbox-codegen.sage.py lin-codegen.sage.py
 	cd src && rm -f *.o
+	cd src/arith && rm -f *.o
 	cd src/labrador && rm -f *.o
+	rm -f demos/arith-backend-demo
 	cd $(THIRD_PARTY_DIR) && rm -rf $(FALCON_SUBDIR)
 	cd $(THIRD_PARTY_DIR) && rm -rf $(HEXL_SUBDIR)
 	cd tests && rm -f *.o *.dSYM && cd .. && rm -f $(TESTS) && rm -f sage-test.sage.py

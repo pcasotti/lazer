@@ -1,6 +1,7 @@
 #include "abdlop.h"
 #include "src/dom.h"
 #include "src/flint/abdlop_coder.h"
+#include "src/flint/abdlop_utils.h"
 #include "src/intvec.h"
 #include "src/urandom.h"
 #include <flint/fmpz_extras.h>
@@ -251,6 +252,22 @@ void abdlop_prove_flint(
     fq_default_mat_t tmp_mul;
     fq_default_mat_init(tmp_mul, kmsis, 1, params->ring);
 
+#if defined(ABDLOP_LAZER_MATMUL)
+    polymat_t A1_l, A2prime_l;
+    polyvec_t y1_l, y21_l, y22_l, w_l;
+    polymat_alloc(A1_l, params->lazer_ring, kmsis, m1);
+    polymat_alloc(A2prime_l, params->lazer_ring, kmsis, m2 - kmsis);
+    polyvec_alloc(y1_l, params->lazer_ring, m1);
+    polyvec_alloc(y21_l, params->lazer_ring, m2 - kmsis);
+    polyvec_alloc(y22_l, params->lazer_ring, kmsis);
+    polyvec_alloc(w_l, params->lazer_ring, kmsis);
+
+    fq_default_mat_to_polymat(A1_l, A1, params->lazer_ring, params->ring, params->mod_ctx);
+    fq_default_mat_to_polymat(A2prime_l, A2prime, params->lazer_ring, params->ring, params->mod_ctx);
+    polymat_tocrt(A1_l);
+    polymat_tocrt(A2prime_l);
+#endif
+
     fmpz_t norm;
     fmpz_init(norm);
 
@@ -273,6 +290,17 @@ void abdlop_prove_flint(
         dom++;
 
         // w = y22 + A1*y1 + A2prime*y21
+#if defined(ABDLOP_LAZER_MATMUL)
+        fq_default_mat_to_polyvec(y1_l, y1, params->lazer_ring, params->ring, params->mod_ctx);
+        fq_default_mat_to_polyvec(y21_l, y21, params->lazer_ring, params->ring, params->mod_ctx);
+        fq_default_mat_to_polyvec(y22_l, y22, params->lazer_ring, params->ring, params->mod_ctx);
+
+        polyvec_set(w_l, y22_l);
+        polyvec_addmul(w_l, A1_l, y1_l, 0);
+        polyvec_addmul(w_l, A2prime_l, y21_l, 0);
+
+        polyvec_to_fq_default_mat(w_l, w, params->ring, params->mod_ctx);
+#else
         fq_default_mat_set(w, y22, params->ring);
 
         fq_default_mat_mul(tmp_mul, A1, y1, params->ring);
@@ -280,6 +308,7 @@ void abdlop_prove_flint(
 
         fq_default_mat_mul(tmp_mul, A2prime, y21, params->ring);
         fq_default_mat_add(w, w, tmp_mul, params->ring);
+#endif
 
         fq_default_mat_dcompress_decompose(w1, w0, w, params);
 
@@ -392,6 +421,15 @@ void abdlop_prove_flint(
     fq_default_mat_window_clear(s22, params->ring);
     fq_default_mat_window_clear(y21, params->ring);
     fq_default_mat_window_clear(y22, params->ring);
+
+#if defined(ABDLOP_LAZER_MATMUL)
+    polymat_free(A1_l);
+    polymat_free(A2prime_l);
+    polyvec_free(y1_l);
+    polyvec_free(y21_l);
+    polyvec_free(y22_l);
+    polyvec_free(w_l);
+#endif
 
     printf("Flint rej avg: %f ms\n", ((double)(total) * 1000.0 / CLOCKS_PER_SEC)/n);
 }

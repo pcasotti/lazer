@@ -1,8 +1,8 @@
 /*
- * TARGET: GENERIC, AMD64
+ * TARGET: TARGET_GENERIC, TARGET_AMD64
  * Architecture target.
  */
-#define TARGET GENERIC
+#define TARGET TARGET_AMD64
 
 /*
  * RNG: SHAKE128, AES256CTR

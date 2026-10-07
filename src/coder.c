@@ -3,9 +3,9 @@
 static inline void _inc_idx (unsigned int *byte, unsigned int *bit);
 static inline void _inc_idx_zero (uint8_t *buf, unsigned int *byte,
                                   unsigned int *bit);
-static unsigned int _uencode (uint8_t **byte, unsigned int *bit,
-                              const intvec_t v, UNUSED const int_t m,
-                              unsigned int mbits);
+unsigned int _uencode (uint8_t **byte, unsigned int *bit,
+                       const intvec_t v, UNUSED const int_t m,
+                       unsigned int mbits);
 static unsigned int _udecode (intvec_t v, const uint8_t **byte,
                               unsigned int *bit, const int_t m,
                               unsigned int mbits);
@@ -430,7 +430,7 @@ _inc_idx_zero (uint8_t *buf, unsigned int *byte, unsigned int *bit)
 /*
  * Encode vector v uniform in {0,...,m-1}.
  */
-static unsigned int
+unsigned int
 _uencode (uint8_t **byte, unsigned int *bit, const intvec_t v,
           UNUSED const int_t m, unsigned int mbits)
 {

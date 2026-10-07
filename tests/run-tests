@@ -24,6 +24,7 @@ tests = [
     'grandom-test',
     'rejection-test',
     'abdlop-test',
+    'arith-abdlop-test2',
     'lnp-quad-test',
     'lnp-quad-many-test',
     'lnp-quad-eval-test',

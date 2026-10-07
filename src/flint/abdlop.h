@@ -23,6 +23,7 @@ typedef dcompress_params_flint_struct dcompress_params_flint_t[1];
 typedef struct {
   fq_default_ctx_struct *ring;
   fmpz_mod_ctx_struct *mod_ctx;
+  polyring_srcptr lazer_ring;     /* matching lazer ring (q, x^d+1) */
   dcompress_params_flint_t dcompress;
   /* dimensions  */
   unsigned int m1;   /* length of "short" message s1 */

@@ -1382,6 +1382,9 @@ int coder_dec_bytes (coder_state_t state, uint8_t *bytes, unsigned int nbytes);
 void coder_dec_grandom (coder_state_t state, intvec_t v, unsigned int log2o);
 void coder_dec_ghint (coder_state_t state, intvec_t ghint);
 
+unsigned int _uencode (uint8_t **byte, unsigned int *bit, const intvec_t v,
+                       const int_t m, unsigned int mbits);
+
 void coder_enc_urandom2 (coder_state_t state, poly_t v, const int_t m,
                          unsigned int mbits);
 int coder_dec_urandom2 (coder_state_t state, poly_t v, const int_t m,

@@ -105,6 +105,106 @@ void fq_default_mat_init_polymat(polymat_t src, fq_default_mat_t dst, fq_default
     }
 }
 
+void fq_default_mat_to_polyvec(polyvec_t dst, const fq_default_mat_t src, polyring_srcptr ring, fq_default_ctx_t fq_ctx, fmpz_mod_ctx_t mod_ctx) {
+    slong nrows = fq_default_mat_nrows(src, fq_ctx);
+    ASSERT_ERR(polyvec_get_nelems(dst) == (unsigned int)nrows);
+
+    int64_t *buf = flint_malloc(ring->d * sizeof(int64_t));
+    fq_default_t e;
+    fq_default_init2(e, fq_ctx);
+
+    for (slong i = 0; i < nrows; ++i) {
+        poly_ptr d = polyvec_get_elem(dst, i);
+
+        fmpz_mod_poly_t p;
+        fmpz_mod_poly_init(p, mod_ctx);
+        fq_default_mat_entry(e, src, i, 0, fq_ctx);
+        fq_default_get_fmpz_mod_poly(p, e, fq_ctx);
+
+        for (unsigned int k = 0; k < ring->d; k++) {
+            fmpz_t c;
+            fmpz_init(c);
+            fmpz_mod_poly_get_coeff_fmpz(c, p, k, mod_ctx);
+            buf[k] = (int64_t)fmpz_get_ui(c);
+            fmpz_clear(c);
+        }
+
+        poly_set_coeffvec_i64(d, buf);
+
+        fmpz_mod_poly_clear(p, mod_ctx);
+    }
+
+    fq_default_clear(e, fq_ctx);
+    flint_free(buf);
+}
+
+void fq_default_mat_to_polymat(polymat_t dst, const fq_default_mat_t src, polyring_srcptr ring, fq_default_ctx_t fq_ctx, fmpz_mod_ctx_t mod_ctx) {
+    slong nrows = fq_default_mat_nrows(src, fq_ctx);
+    slong ncols = fq_default_mat_ncols(src, fq_ctx);
+    ASSERT_ERR(polymat_get_nrows(dst) == (unsigned int)nrows);
+    ASSERT_ERR(polymat_get_ncols(dst) == (unsigned int)ncols);
+
+    int64_t *buf = flint_malloc(ring->d * sizeof(int64_t));
+    fq_default_t e;
+    fq_default_init2(e, fq_ctx);
+
+    for (slong i = 0; i < nrows; ++i) {
+        for (slong j = 0; j < ncols; ++j) {
+            poly_ptr d = polymat_get_elem(dst, i, j);
+
+            fmpz_mod_poly_t p;
+            fmpz_mod_poly_init(p, mod_ctx);
+            fq_default_mat_entry(e, src, i, j, fq_ctx);
+            fq_default_get_fmpz_mod_poly(p, e, fq_ctx);
+
+            for (unsigned int k = 0; k < ring->d; k++) {
+                fmpz_t c;
+                fmpz_init(c);
+                fmpz_mod_poly_get_coeff_fmpz(c, p, k, mod_ctx);
+                buf[k] = (int64_t)fmpz_get_ui(c);
+                fmpz_clear(c);
+            }
+
+            poly_set_coeffvec_i64(d, buf);
+
+            fmpz_mod_poly_clear(p, mod_ctx);
+        }
+    }
+
+    fq_default_clear(e, fq_ctx);
+    flint_free(buf);
+}
+
+void polyvec_to_fq_default_mat(polyvec_t src, fq_default_mat_t dst, fq_default_ctx_t fq_ctx, fmpz_mod_ctx_t mod_ctx) {
+    polyvec_fromcrt(src);
+
+    slong nrows = fq_default_mat_nrows(dst, fq_ctx);
+    ASSERT_ERR(polyvec_get_nelems(src) == (unsigned int)nrows);
+
+    int64_t *buf = flint_malloc(src->ring->d * sizeof(int64_t));
+
+    for (slong i = 0; i < nrows; ++i) {
+        poly_ptr s = polyvec_get_elem(src, i);
+        poly_get_coeffvec_i64(buf, s);
+
+        fmpz_mod_poly_t p;
+        fmpz_mod_poly_init(p, mod_ctx);
+        for (unsigned int k = 0; k < src->ring->d; k++) {
+            fmpz_mod_poly_set_coeff_si(p, k, buf[k], mod_ctx);
+        }
+
+        fq_default_t e;
+        fq_default_init2(e, fq_ctx);
+        fq_default_set_fmpz_mod_poly(e, p, fq_ctx);
+        fq_default_mat_entry_set(dst, i, 0, e, fq_ctx);
+        fq_default_clear(e, fq_ctx);
+
+        fmpz_mod_poly_clear(p, mod_ctx);
+    }
+
+    flint_free(buf);
+}
+
 void abdlop_params_to_flint(
     abdlop_params_flint_t dst,
     const abdlop_params_t src,
@@ -113,6 +213,7 @@ void abdlop_params_to_flint(
 ) {
     dst->ring = ring;
     dst->mod_ctx = mod_ctx;
+    dst->lazer_ring = src->ring;
 
     fmpz_init_int(dst->dcompress->q, src->dcompress->q);
     fmpz_init_int(dst->dcompress->qminus1, src->dcompress->qminus1);
