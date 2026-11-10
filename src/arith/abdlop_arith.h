@@ -9,12 +9,9 @@
  * of ring arithmetic runs through the ops of arith.h, so exactly the same
  * straight-line protocol produces identical values in every backend.
  *
- * Input generation (sampling, RNG, hashing) stays ABOVE this layer,
- * exactly as documented in arith.h: the public matrices are expanded from
- * the seed with the lazer uniform samplers and imported through the
- * coefficient accessors, and the prove loop drives the gaussian/autostable
- * samplers and the shake/coder machinery directly (they are deterministic,
- * backend independent, and only ever touch coefficient accessors).
+ * Input generation (sampling, RNG, hashing) is handled internally with
+ * self-contained, deterministic implementations (no lazer.h dependency);
+ * only the arith interface is required.
  *
  * Everything compression/dcompression, rejection and norm related is done
  * coefficient by coefficient, in plain integer arithmetic, above the
@@ -22,8 +19,8 @@
  * through the backend ops.
  */
 
-#include "lazer.h"
 #include "arith.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -37,8 +34,7 @@ extern "C"
     arith_ring_ptr ring;
   } abdlop_arith_engine_t;
 
-  /* Scalar parameters extracted above the interface, so the pipeline is
-   * backend independent. */
+  /* Scalar parameters, fully self-contained (no lazer types). */
   typedef struct
   {
     unsigned long long q;
@@ -49,11 +45,30 @@ extern "C"
     int m_odd;
     unsigned int omega, log2omega, log2stdev1, log2stdev2;
     int rej1, rej2;
-    abdlop_params_srcptr p; /* lazer params: ring + scalars for sampling */
+    /* rejection sampling: scM = round(M * 2^128) as 3 limbs (le), sigma^2 */
+    uint64_t scM1[3], scM2[3];
+    uint64_t stdev1sqr[2], stdev2sqr[2]; /* 128-bit enough, nlimbs<=2 */
   } abdlop_arith_params_t;
 
-  void abdlop_arith_params_init (abdlop_arith_params_t *ap,
-                                 const abdlop_params_srcptr params);
+  /* Initialize scalar params from explicit values. */
+  void abdlop_arith_params_set (abdlop_arith_params_t *ap,
+                                unsigned long long q, unsigned int d,
+                                unsigned int log2q, unsigned int D,
+                                unsigned int log2m, unsigned int m1,
+                                unsigned int m2, unsigned int kmsis,
+                                unsigned int l, unsigned int lext,
+                                long long qminus1, long long mval,
+                                long long mby2v, long long gammav,
+                                long long gammaby2v, long long pow2Dv,
+                                long long pow2Dby2v, long long Bsqr,
+                                int m_odd, unsigned int omega,
+                                unsigned int log2omega,
+                                unsigned int log2stdev1, int rej1,
+                                const uint64_t scM1[3],
+                                const uint64_t stdev1sqr[2],
+                                unsigned int log2stdev2, int rej2,
+                                const uint64_t scM2[3],
+                                const uint64_t stdev2sqr[2]);
 
   /* Expand uniformly random A1 (kmsis x m1), A2prime (kmsis x m22),
    * Bprime (l x m22) from seed||0, seed||1, seed||2 respectively.
@@ -63,12 +78,7 @@ extern "C"
                             const uint8_t seed[32], arith_mat_ptr A1,
                             arith_mat_ptr A2prime, arith_mat_ptr Bprime);
 
-  /* tA1,tA2 in Rq^kmsis, tB in Rq^l.
-   * tA2 = s22 + A1*s1 + A2prime*s21 ;
-   * tA1 = Power2Round(tA2,D) ; tA2 <- tA2 - 2^D*tA1 ;
-   * tB  = m + Bprime*s21.
-   * Caller allocates tA1,tA2,tB and imports s1 (m1), m (l), s2 (m2),
-   * A1, A2prime, Bprime through the accessors. */
+  /* tA1,tA2 in Rq^kmsis, tB in Rq^l. */
   void abdlop_arith_commit (abdlop_arith_engine_t *e,
                             const abdlop_arith_params_t *ap,
                             arith_vec_ptr tA1, arith_vec_ptr tA2,
@@ -78,21 +88,12 @@ extern "C"
                             const arith_mat_ptr A2prime,
                             const arith_mat_ptr Bprime);
 
-  /* hash <- H(hash || encode(tA1,tB)), matching abdlop_hashcomm. */
+  /* hash <- H(hash || encode(tA1,tB)). */
   void abdlop_arith_hashcomm (uint8_t hash[32], abdlop_arith_engine_t *e,
                               const abdlop_arith_params_t *ap,
                               const arith_vec_ptr tA1,
                               const arith_vec_ptr tB);
 
-  /* Compress an opening proof (c,z1,z21,h) from hash of transcript, short
-   * message s1 and randomness s2, tA2 and the public key parts.
-   * Rejection sampling is deterministic (see params) and driven with the
-   * lazer samplers above the interface; updates hash to the challenge seed.
-   * Caller allocates c, z1 (m1), z21 (m22), h (kmsis) and imports tA2,
-   * s1, s2, A1, A2prime.  stats, if non-NULL, receives the rejection loop
-   * breakdown: attempts counts the rejection cycles (loop iterations), rej_ms
-   * is the time inside the loop (sampling + arithmetic + rejection) and
-   * post_ms the time after the accepted attempt (w1post/hint/finalize). */
   typedef struct
   {
     unsigned int attempts;
@@ -111,9 +112,6 @@ extern "C"
                            const abdlop_arith_params_t *ap,
                            abdlop_arith_prove_stats_t *stats);
 
-  /* Verify an opening proof (c,z1,z21,h) from hash of transcript,
-   * commitment part tA1 and public key parts; updates hash.
-   * Returns 1 on successful verification. */
   int abdlop_arith_verify (uint8_t hash[32], const arith_poly_ptr c,
                            const arith_vec_ptr z1, const arith_vec_ptr z21,
                            const arith_vec_ptr h, const arith_vec_ptr tA1,

@@ -351,7 +351,7 @@ fl_vec_acc (const arith_vec_ptr w, const arith_vec_ptr a, int neg)
 /* ------------------------------------------------------------------ */
 
 static const arith_ops_s ops = {
-    "flint",
+    "flint-fq",
 
     fl_ring_new,
     fl_ring_free,

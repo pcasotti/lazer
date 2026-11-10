@@ -306,7 +306,7 @@ np_vec_acc (const arith_vec_ptr w, const arith_vec_ptr a, int neg)
 /* ------------------------------------------------------------------ */
 
 static const arith_ops_s ops = {
-    "nmod",
+    "flint-nmod",
 
     np_ring_new,
     np_ring_free,

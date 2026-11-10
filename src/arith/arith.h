@@ -99,6 +99,7 @@ extern "C"
   arith_ops_ptr arith_flint_ops (void);
   arith_ops_ptr arith_nmod_ops (void); /* FLINT nmod_poly, single limb */
   arith_ops_ptr arith_ntl_ops (void);  /* NTL ZZ_pX */
+  arith_ops_ptr arith_rust_arith_ops (void); /* rust-arith: HEXL + lazy CRT/NTT */
 
 #ifdef __cplusplus
 }
